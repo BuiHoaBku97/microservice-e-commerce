@@ -3,10 +3,8 @@ spring:
     name: gateway
 
   security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: ${IDENTITY_JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
+    jwt:
+      jwk-set-uri: ${IDENTITY_JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
 
   cloud:
     gateway:
