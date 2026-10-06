@@ -5,24 +5,19 @@ import com.nimbusds.jose.jwk.RSAKey;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.security.KeyPair;
-import java.security.interfaces.RSAPublicKey;
 import java.util.Map;
 
 @RestController
 public class JwkController {
 
-    private final KeyPair keyPair;
+    private final RSAKey rsaKey;
 
-    public JwkController(KeyPair keyPair) {
-        this.keyPair = keyPair;
+    public JwkController(RSAKey rsaKey) {
+        this.rsaKey = rsaKey;
     }
 
     @GetMapping("/.well-known/jwks.json")
     public Map<String, Object> keys() {
-        RSAKey publicKey = new RSAKey.Builder((RSAPublicKey) keyPair.getPublic())
-                .keyID("ecommerce-identity")
-                .build();
-        return new JWKSet(publicKey).toJSONObject();
+        return new JWKSet(rsaKey.toPublicJWK()).toJSONObject();
     }
 }
