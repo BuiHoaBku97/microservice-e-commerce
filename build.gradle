@@ -1,0 +1,2 @@
+// Workspace aggregator for IntelliJ and optional root-level Gradle commands.
+// Each included service also has its own standalone Gradle build and wrapper.

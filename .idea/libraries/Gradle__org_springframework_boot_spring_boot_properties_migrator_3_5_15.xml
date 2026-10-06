@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: org.springframework.boot:spring-boot-properties-migrator:3.5.15" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="org.springframework.boot" artifactId="spring-boot-properties-migrator" version="3.5.15" baseVersion="3.5.15" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.boot/spring-boot-properties-migrator/3.5.15/8f2fd32f7a39662f5c2b746d27f5f82a7c374ee9/spring-boot-properties-migrator-3.5.15.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.boot/spring-boot-properties-migrator/3.5.15/c9566d8ba5f486f46d0f609a44ae2fc6efb1c38a/spring-boot-properties-migrator-3.5.15-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

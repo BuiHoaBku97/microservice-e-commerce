@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: com.netflix.eureka:eureka-client-jersey3:2.0.6" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="com.netflix.eureka" artifactId="eureka-client-jersey3" version="2.0.6" baseVersion="2.0.6" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.netflix.eureka/eureka-client-jersey3/2.0.6/31f90e693c8d82a2a8e322bc969a18a678a0bf73/eureka-client-jersey3-2.0.6.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.netflix.eureka/eureka-client-jersey3/2.0.6/774c08bfe357510e5fd3b38289a10bb1a6aa65d5/eureka-client-jersey3-2.0.6-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

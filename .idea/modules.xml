@@ -2,7 +2,28 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/e-commerce.iml" filepath="$PROJECT_DIR$/e-commerce.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/e-commerce.iml" filepath="$PROJECT_DIR$/.idea/modules/e-commerce.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/catalog-service/e-commerce.catalog-service.iml" filepath="$PROJECT_DIR$/.idea/modules/catalog-service/e-commerce.catalog-service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/catalog-service/e-commerce.catalog-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/catalog-service/e-commerce.catalog-service.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/catalog-service/e-commerce.catalog-service.test.iml" filepath="$PROJECT_DIR$/.idea/modules/catalog-service/e-commerce.catalog-service.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka-server/e-commerce.eureka-server.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka-server/e-commerce.eureka-server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka-server/e-commerce.eureka-server.main.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka-server/e-commerce.eureka-server.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka-server/e-commerce.eureka-server.test.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka-server/e-commerce.eureka-server.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/gateway/e-commerce.gateway.iml" filepath="$PROJECT_DIR$/.idea/modules/gateway/e-commerce.gateway.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/gateway/e-commerce.gateway.main.iml" filepath="$PROJECT_DIR$/.idea/modules/gateway/e-commerce.gateway.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/gateway/e-commerce.gateway.test.iml" filepath="$PROJECT_DIR$/.idea/modules/gateway/e-commerce.gateway.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/identity-service/e-commerce.identity-service.iml" filepath="$PROJECT_DIR$/.idea/modules/identity-service/e-commerce.identity-service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/identity-service/e-commerce.identity-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/identity-service/e-commerce.identity-service.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/identity-service/e-commerce.identity-service.test.iml" filepath="$PROJECT_DIR$/.idea/modules/identity-service/e-commerce.identity-service.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/notification-service/e-commerce.notification-service.iml" filepath="$PROJECT_DIR$/.idea/modules/notification-service/e-commerce.notification-service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/notification-service/e-commerce.notification-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/notification-service/e-commerce.notification-service.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/notification-service/e-commerce.notification-service.test.iml" filepath="$PROJECT_DIR$/.idea/modules/notification-service/e-commerce.notification-service.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/order-service/e-commerce.order-service.iml" filepath="$PROJECT_DIR$/.idea/modules/order-service/e-commerce.order-service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/order-service/e-commerce.order-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/order-service/e-commerce.order-service.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/order-service/e-commerce.order-service.test.iml" filepath="$PROJECT_DIR$/.idea/modules/order-service/e-commerce.order-service.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/payment-service/e-commerce.payment-service.iml" filepath="$PROJECT_DIR$/.idea/modules/payment-service/e-commerce.payment-service.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/payment-service/e-commerce.payment-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/payment-service/e-commerce.payment-service.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/payment-service/e-commerce.payment-service.test.iml" filepath="$PROJECT_DIR$/.idea/modules/payment-service/e-commerce.payment-service.test.iml" />
     </modules>
   </component>
 </project>

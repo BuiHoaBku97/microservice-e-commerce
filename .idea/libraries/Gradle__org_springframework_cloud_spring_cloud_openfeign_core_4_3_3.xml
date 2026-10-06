@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: org.springframework.cloud:spring-cloud-openfeign-core:4.3.3" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="org.springframework.cloud" artifactId="spring-cloud-openfeign-core" version="4.3.3" baseVersion="4.3.3" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.cloud/spring-cloud-openfeign-core/4.3.3/f29916d3bc457b5e223190e75776bc638ee2ab89/spring-cloud-openfeign-core-4.3.3.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.cloud/spring-cloud-openfeign-core/4.3.3/487231b7a853fc0c5c3b1d7ff1e8607552f13525/spring-cloud-openfeign-core-4.3.3-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

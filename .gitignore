@@ -1,0 +1,10 @@
+.ai
+.idea/
+*.iml
+.gradle/
+**/build/
+out/
+*.log
+.env
+.env.*
+!.env.example

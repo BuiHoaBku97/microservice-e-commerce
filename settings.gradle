@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'e-commerce'
+
+include 'gateway'
+include 'eureka-server'
+include 'identity-service'
+include 'catalog-service'
+include 'order-service'
+include 'payment-service'
+include 'notification-service'

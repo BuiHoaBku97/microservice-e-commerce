@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: org.springframework.data:spring-data-elasticsearch:5.5.12" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="org.springframework.data" artifactId="spring-data-elasticsearch" version="5.5.12" baseVersion="5.5.12" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.data/spring-data-elasticsearch/5.5.12/199db05269c88cb13a0448241db9b03562a90d49/spring-data-elasticsearch-5.5.12.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.springframework.data/spring-data-elasticsearch/5.5.12/4256ab7dcf003cb374a5725bb687edec9a191c9b/spring-data-elasticsearch-5.5.12-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

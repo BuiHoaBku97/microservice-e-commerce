@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: identity-service
+  profiles:
+    default: local
+  datasource:
+    url: ${IDENTITY_DB_URL:jdbc:postgresql://localhost:5432/identity_db}
+    username: ${IDENTITY_DB_USERNAME:identity_user}
+    password: ${IDENTITY_DB_PASSWORD:identity_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+security:
+  jwt:
+    access-token-seconds: ${JWT_ACCESS_TOKEN_SECONDS:900}
+
+server:
+  port: 8081
