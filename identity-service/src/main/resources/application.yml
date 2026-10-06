@@ -18,6 +18,8 @@ spring:
 security:
   jwt:
     access-token-seconds: ${JWT_ACCESS_TOKEN_SECONDS:900}
+    private-key-path: ${JWT_PRIVATE_KEY_PATH:./secrets/jwt-private-key.pem}
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:./secrets/jwt-public-key.pem}
 
 eureka:
   client:
