@@ -1,12 +1,12 @@
 package com.ecommerce.gateway.configs;
 
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.crypto.RSASSAVerifier;
-import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jwt.SignedJWT;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import java.net.URI;
-import java.security.interfaces.RSAPublicKey;
+import java.security.KeyFactory;
+import java.security.spec.RSAPublicKeySpec;
 import java.util.Arrays;
 import java.util.Date;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,11 +24,13 @@ import reactor.core.publisher.Mono;
 @Component
 public class JwtAuthenticationWebFilter implements WebFilter {
     private final WebClient client;
+    private final ObjectMapper objectMapper;
     private final URI jwkSetUri;
 
-    public JwtAuthenticationWebFilter(WebClient.Builder builder,
+    public JwtAuthenticationWebFilter(WebClient.Builder builder, ObjectMapper objectMapper,
                                       @Value("${spring.security.jwt.jwk-set-uri}") URI jwkSetUri) {
         this.client = builder.build();
+        this.objectMapper = objectMapper;
         this.jwkSetUri = jwkSetUri;
     }
 
@@ -46,13 +48,18 @@ public class JwtAuthenticationWebFilter implements WebFilter {
 
     private UsernamePasswordAuthenticationToken authenticate(String token, String jwkJson) {
         try {
-            SignedJWT jwt = SignedJWT.parse(token);
-            if (!JWSAlgorithm.RS256.equals(jwt.getHeader().getAlgorithm())) throw new IllegalArgumentException("Thuật toán JWT không hợp lệ");
-            RSAKey key = JWKSet.parse(jwkJson).getKeyByKeyId(jwt.getHeader().getKeyID()).toRSAKey();
-            if (!jwt.verify(new RSASSAVerifier((RSAPublicKey) key.toPublicKey())) || jwt.getJWTClaimsSet().getExpirationTime().before(new Date())) throw new IllegalArgumentException("JWT không hợp lệ");
-            var authorities = Arrays.stream(jwt.getJWTClaimsSet().getStringClaim("scope").split("\\s+"))
+            Claims claims = Jwts.parser().verifyWith(publicKey(jwkJson)).build().parseSignedClaims(token).getPayload();
+            if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) throw new IllegalArgumentException("JWT không hợp lệ");
+            var authorities = Arrays.stream(claims.get("scope", String.class).split("\\s+"))
                     .filter(role -> !role.isBlank()).map(role -> new SimpleGrantedAuthority("SCOPE_" + role)).toList();
-            return UsernamePasswordAuthenticationToken.authenticated(jwt.getJWTClaimsSet().getSubject(), token, authorities);
+            return UsernamePasswordAuthenticationToken.authenticated(claims.getSubject(), token, authorities);
         } catch (Exception exception) { throw new IllegalArgumentException("JWT không hợp lệ", exception); }
+    }
+
+    private java.security.PublicKey publicKey(String body) throws Exception {
+        JsonNode key = objectMapper.readTree(body).path("keys").get(0);
+        byte[] modulus = java.util.Base64.getUrlDecoder().decode(key.path("n").asText());
+        byte[] exponent = java.util.Base64.getUrlDecoder().decode(key.path("e").asText());
+        return KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(new java.math.BigInteger(1, modulus), new java.math.BigInteger(1, exponent)));
     }
 }
