@@ -1,7 +1,8 @@
 package com.ecommerce.gateway.configs;
 
+import io.jsonwebtoken.Claims;
+import java.util.Arrays;
 import org.springframework.http.server.PathContainer;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.util.pattern.PathPatternParser;
@@ -14,12 +15,12 @@ public class RouteValidator {
     return GatewayRouteRule.OPEN_API.stream().anyMatch(rule -> matches(rule, exchange));
   }
 
-  public boolean hasRouteAccess(ServerWebExchange exchange, Authentication authentication) {
+  public boolean hasRouteAccess(ServerWebExchange exchange, Claims claims) {
     if (!isAdminRoute(exchange)) {
       return true;
     }
-    return authentication.getAuthorities().stream()
-        .anyMatch(authority -> "SCOPE_ADMIN".equals(authority.getAuthority()));
+    String scope = claims.get("scope", String.class);
+    return scope != null && Arrays.asList(scope.split("\\s+")).contains("ADMIN");
   }
 
   private boolean isAdminRoute(ServerWebExchange exchange) {

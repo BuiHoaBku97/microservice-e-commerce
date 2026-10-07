@@ -5,7 +5,6 @@ import io.jsonwebtoken.Jwts;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Arrays;
 import java.util.Date;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -13,10 +12,6 @@ import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -49,13 +44,11 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
     }
 
     try {
-      Authentication authentication = authenticate(header.substring(7));
-      if (!routeValidator.hasRouteAccess(exchange, authentication)) {
+      Claims claims = authenticate(header.substring(7));
+      if (!routeValidator.hasRouteAccess(exchange, claims)) {
         return complete(exchange, HttpStatus.FORBIDDEN);
       }
-      return chain
-          .filter(exchange)
-          .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+      return chain.filter(exchange);
     } catch (Exception exception) {
       return complete(exchange, HttpStatus.UNAUTHORIZED);
     }
@@ -66,23 +59,14 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
     return Ordered.HIGHEST_PRECEDENCE;
   }
 
-  private Authentication authenticate(String token) {
+  private Claims authenticate(String token) {
     Claims claims =
         Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token).getPayload();
     if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
       throw new IllegalArgumentException("JWT không hợp lệ");
     }
 
-    String scope = claims.get("scope", String.class);
-    var authorities =
-        scope == null
-            ? java.util.List.<SimpleGrantedAuthority>of()
-            : Arrays.stream(scope.split("\\s+"))
-                .filter(role -> !role.isBlank())
-                .map(role -> new SimpleGrantedAuthority("SCOPE_" + role))
-                .toList();
-    return UsernamePasswordAuthenticationToken.authenticated(
-        claims.getSubject(), token, authorities);
+    return claims;
   }
 
   private Mono<Void> complete(ServerWebExchange exchange, HttpStatus status) {
