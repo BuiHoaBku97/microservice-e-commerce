@@ -8,28 +8,36 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
-@Table(name = "carts", uniqueConstraints = @UniqueConstraint(name = "uk_carts_user", columnNames = "user_id"))
+@Table(
+    name = "carts",
+    uniqueConstraints = @UniqueConstraint(name = "uk_carts_user", columnNames = "user_id"))
 @Getter
 @Setter
 @NoArgsConstructor
 public class Cart {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    private Long userId;
-    private Long version = 0L;
-    private Instant createdAt;
-    private Instant updatedAt;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<CartItem> items = new ArrayList<>();
+  private Long userId;
+  private Long version = 0L;
+  private Instant createdAt;
+  private Instant updatedAt;
 
-    public void touch() { if (createdAt == null) createdAt = Instant.now(); updatedAt = Instant.now(); version++; }
+  @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
+  private List<CartItem> items = new ArrayList<>();
+
+  public void touch() {
+    if (createdAt == null) createdAt = Instant.now();
+    updatedAt = Instant.now();
+    version++;
+  }
 }

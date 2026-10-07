@@ -3,10 +3,10 @@ package com.ecommerce.order.models.entities;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import java.time.Instant;
 
 @Entity
 @Table(name = "inventory")
@@ -14,12 +14,10 @@ import java.time.Instant;
 @Setter
 @NoArgsConstructor
 public class Inventory {
-    @Id
-    private Long skuId;
-    private Integer onHand = 0;
-    private Integer reserved = 0;
-    private Long version = 0L;
-    private Instant createdAt;
-    private Instant updatedAt;
-
+  @Id private Long skuId;
+  private Integer onHand = 0;
+  private Integer reserved = 0;
+  private Long version = 0L;
+  private Instant createdAt;
+  private Instant updatedAt;
 }

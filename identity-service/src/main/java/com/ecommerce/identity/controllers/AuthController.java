@@ -20,28 +20,30 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-    private final IdentityService identityService;
+  private final IdentityService identityService;
 
-    public AuthController(IdentityService identityService) {
-        this.identityService = identityService;
-    }
+  public AuthController(IdentityService identityService) {
+    this.identityService = identityService;
+  }
 
-    @PostMapping("/register")
-    ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request,
-                                                        HttpServletRequest httpRequest) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(identityService.register(request), httpRequest.getRequestId()));
-    }
+  @PostMapping("/register")
+  ResponseEntity<ApiResponse<UserResponse>> register(
+      @Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(ApiResponse.success(identityService.register(request), httpRequest.getRequestId()));
+  }
 
-    @PostMapping("/login")
-    ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request,
-                                                     HttpServletRequest httpRequest) {
-        return ResponseEntity.ok(ApiResponse.success(identityService.login(request), httpRequest.getRequestId()));
-    }
+  @PostMapping("/login")
+  ResponseEntity<ApiResponse<TokenResponse>> login(
+      @Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    return ResponseEntity.ok(
+        ApiResponse.success(identityService.login(request), httpRequest.getRequestId()));
+  }
 
-    @PostMapping("/refresh")
-    ResponseEntity<ApiResponse<TokenResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request,
-                                                       HttpServletRequest httpRequest) {
-        return ResponseEntity.ok(ApiResponse.success(identityService.refresh(request), httpRequest.getRequestId()));
-    }
+  @PostMapping("/refresh")
+  ResponseEntity<ApiResponse<TokenResponse>> refresh(
+      @Valid @RequestBody RefreshTokenRequest request, HttpServletRequest httpRequest) {
+    return ResponseEntity.ok(
+        ApiResponse.success(identityService.refresh(request), httpRequest.getRequestId()));
+  }
 }

@@ -14,55 +14,83 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "products")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "category_id", nullable = false)
-    private Category category;
-    @Column(nullable = false, length = 200)
-    private String name;
-    @Column(columnDefinition = "text")
-    private String description;
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "image_urls", columnDefinition = "jsonb", nullable = false)
-    private List<String> imageUrls = new ArrayList<>();
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private Status status = Status.DRAFT;
-    @Version
-    @Column(nullable = false)
-    private Long version;
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    public Product(Category category, String name, String description, List<String> imageUrls) {
-        this.category = category;
-        this.name = name;
-        this.description = description;
-        this.imageUrls = new ArrayList<>(imageUrls);
-    }
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "category_id", nullable = false)
+  private Category category;
 
-    @PrePersist void onCreate() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
-    @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
-    public List<String> getImageUrls() { return List.copyOf(imageUrls); }
-    public void update(Category category, String name, String description, List<String> imageUrls) { this.category = category; this.name = name; this.description = description; this.imageUrls = new ArrayList<>(imageUrls); }
-    public void changeStatus(Status status) { this.status = status; }
+  @Column(nullable = false, length = 200)
+  private String name;
+
+  @Column(columnDefinition = "text")
+  private String description;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "image_urls", columnDefinition = "jsonb", nullable = false)
+  private List<String> imageUrls = new ArrayList<>();
+
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private Status status = Status.DRAFT;
+
+  @Version
+  @Column(nullable = false)
+  private Long version;
+
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private Instant createdAt;
+
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt;
+
+  public Product(Category category, String name, String description, List<String> imageUrls) {
+    this.category = category;
+    this.name = name;
+    this.description = description;
+    this.imageUrls = new ArrayList<>(imageUrls);
+  }
+
+  @PrePersist
+  void onCreate() {
+    Instant now = Instant.now();
+    createdAt = now;
+    updatedAt = now;
+  }
+
+  @PreUpdate
+  void onUpdate() {
+    updatedAt = Instant.now();
+  }
+
+  public List<String> getImageUrls() {
+    return List.copyOf(imageUrls);
+  }
+
+  public void update(Category category, String name, String description, List<String> imageUrls) {
+    this.category = category;
+    this.name = name;
+    this.description = description;
+    this.imageUrls = new ArrayList<>(imageUrls);
+  }
+
+  public void changeStatus(Status status) {
+    this.status = status;
+  }
 }
