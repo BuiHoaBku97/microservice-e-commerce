@@ -13,6 +13,7 @@ import com.ecommerce.identity.models.entities.UserStatus;
 import com.ecommerce.identity.repositories.UserRepository;
 import com.ecommerce.identity.services.IdentityService;
 import com.ecommerce.identity.utils.JwtTokenService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,19 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Set;
 
 @Service
+@RequiredArgsConstructor
 public class IdentityServiceImpl implements IdentityService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
-
-    public IdentityServiceImpl(UserRepository userRepository,
-                               PasswordEncoder passwordEncoder,
-                               JwtTokenService jwtTokenService) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtTokenService = jwtTokenService;
-    }
 
     @Override
     @Transactional
