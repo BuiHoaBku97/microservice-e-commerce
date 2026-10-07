@@ -41,7 +41,7 @@ public class JwtTokenService {
 
     public TokenResponse refresh(String refreshToken) {
         try {
-            Jwts.parser().verifyWith((java.security.PublicKey) keyPair.getPublic()).build().parseSignedClaims(refreshToken);
+            Jwts.parser().verifyWith(keyPair.getPublic()).build().parseSignedClaims(refreshToken);
         } catch (Exception exception) {
             throw new IllegalArgumentException("Refresh token không hợp lệ hoặc đã hết hạn", exception);
         }
