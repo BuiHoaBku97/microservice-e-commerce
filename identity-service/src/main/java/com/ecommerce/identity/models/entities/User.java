@@ -16,6 +16,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -23,6 +25,8 @@ import java.util.Set;
 
 @Entity
 @Table(name = "users", uniqueConstraints = @UniqueConstraint(name = "uk_users_email", columnNames = "email"))
+@Getter
+@NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
 public class User {
 
     @Id
@@ -61,9 +65,6 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected User() {
-    }
-
     public User(String email, String passwordHash, String fullName, Set<RoleName> roles) {
         this.email = email;
         this.passwordHash = passwordHash;
@@ -84,14 +85,7 @@ public class User {
         updatedAt = Instant.now();
     }
 
-    public Long getId() { return id; }
-    public String getEmail() { return email; }
-    public String getPasswordHash() { return passwordHash; }
-    public String getFullName() { return fullName; }
-    public String getPhone() { return phone; }
-    public UserStatus getStatus() { return status; }
     public Set<RoleName> getRoles() { return Set.copyOf(roles); }
-    public Long getVersion() { return version; }
 
     public void updateProfile(String fullName, String phone) {
         this.fullName = fullName;
