@@ -37,7 +37,15 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiResponse<Void>> credentials(BadCredentialsException exception,
                                                   HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>("UNAUTHENTICATED", "Thông tin đăng nhập không hợp lệ", null,
+                .body(new ApiResponse<>("PASSWORD_INCORRECT", "Mật khẩu không đúng", null,
+                        request.getRequestId()));
+    }
+
+    @ExceptionHandler(AccountNotActiveException.class)
+    ResponseEntity<ApiResponse<Void>> accountNotActive(AccountNotActiveException exception,
+                                                       HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>("ACCOUNT_NOT_ACTIVE", "Tài khoản không ở trạng thái hoạt động", null,
                         request.getRequestId()));
     }
 }

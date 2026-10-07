@@ -1,5 +1,7 @@
 package com.ecommerce.identity.services.impls;
 
+import com.ecommerce.identity.exceptions.AccountNotActiveException;
+import com.ecommerce.identity.exceptions.PasswordIncorrectException;
 import com.ecommerce.identity.models.dtos.requests.LoginRequest;
 import com.ecommerce.identity.models.dtos.requests.RefreshTokenRequest;
 import com.ecommerce.identity.models.dtos.requests.RegisterRequest;
@@ -12,7 +14,6 @@ import com.ecommerce.identity.repositories.UserRepository;
 import com.ecommerce.identity.services.IdentityService;
 import com.ecommerce.identity.utils.JwtTokenService;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,10 +39,7 @@ public class IdentityServiceImpl implements IdentityService {
     @Transactional
     public UserResponse register(RegisterRequest request) {
         String email = normalizeEmail(request.email());
-        if (userRepository.existsByEmail(email)) {
-            throw new IllegalStateException("EMAIL_EXISTS");
-        }
-
+        if (userRepository.existsByEmail(email)) throw new IllegalStateException("EMAIL_EXISTS");
         try {
             User user = new User(email, passwordEncoder.encode(request.password()),
                     request.fullName().trim(), Set.of(RoleName.CUSTOMER));
@@ -55,10 +53,12 @@ public class IdentityServiceImpl implements IdentityService {
     @Transactional(readOnly = true)
     public TokenResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(normalizeEmail(request.email()))
-                .orElseThrow(() -> new BadCredentialsException("Thông tin đăng nhập không hợp lệ"));
-        if (user.getStatus() != UserStatus.ACTIVE ||
-                !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BadCredentialsException("Thông tin đăng nhập không hợp lệ");
+                .orElseThrow(() -> new PasswordIncorrectException("Mật khẩu không đúng"));
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new AccountNotActiveException("Tài khoản không ở trạng thái hoạt động");
+        }
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new PasswordIncorrectException("Mật khẩu không đúng");
         }
         return jwtTokenService.issue(user);
     }
