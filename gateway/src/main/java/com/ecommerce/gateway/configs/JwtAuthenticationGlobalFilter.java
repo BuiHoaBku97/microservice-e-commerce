@@ -50,7 +50,7 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
 
     try {
       Authentication authentication = authenticate(header.substring(7));
-      if (!routeValidator.hasRequiredAuthorities(exchange, authentication)) {
+      if (!routeValidator.hasRouteAccess(exchange, authentication)) {
         return complete(exchange, HttpStatus.FORBIDDEN);
       }
       return chain

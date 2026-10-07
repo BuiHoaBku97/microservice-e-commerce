@@ -1,73 +1,39 @@
 package com.ecommerce.gateway.configs;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.server.PathContainer;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
-import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 
 @Component
 public class RouteValidator {
-  private final GatewaySecurityProperties properties;
   private final PathPatternParser pathPatternParser = PathPatternParser.defaultInstance;
 
-  public RouteValidator(GatewaySecurityProperties properties) {
-    this.properties = properties;
-    validateRules(properties.getOpenApi());
-    validateRules(properties.getRouteRules());
-  }
-
   public boolean isOpenApi(ServerWebExchange exchange) {
-    return matchesAny(properties.getOpenApi(), exchange);
+    return GatewayRouteRule.OPEN_API.stream().anyMatch(rule -> matches(rule, exchange));
   }
 
-  public boolean hasRequiredAuthorities(ServerWebExchange exchange, Authentication authentication) {
-    List<GatewaySecurityProperties.RouteRule> matchingRules =
-        properties.getRouteRules().stream().filter(rule -> matches(rule, exchange)).toList();
-    if (matchingRules.isEmpty()) {
+  public boolean hasRouteAccess(ServerWebExchange exchange, Authentication authentication) {
+    if (!isAdminRoute(exchange)) {
       return true;
     }
-
-    Set<String> grantedAuthorities =
-        authentication.getAuthorities().stream()
-            .map(granted -> granted.getAuthority())
-            .collect(Collectors.toSet());
-    return matchingRules.stream()
-        .anyMatch(rule -> grantedAuthorities.containsAll(rule.getAuthorities()));
+    return authentication.getAuthorities().stream()
+        .anyMatch(authority -> "SCOPE_ADMIN".equals(authority.getAuthority()));
   }
 
-  private boolean matchesAny(
-      List<GatewaySecurityProperties.RouteRule> rules, ServerWebExchange exchange) {
-    return rules.stream().anyMatch(rule -> matches(rule, exchange));
+  private boolean isAdminRoute(ServerWebExchange exchange) {
+    return pathPatternParser
+        .parse(GatewayRouteRule.ADMIN_PATH)
+        .matches(PathContainer.parsePath(exchange.getRequest().getPath().value()));
   }
 
-  private boolean matches(GatewaySecurityProperties.RouteRule rule, ServerWebExchange exchange) {
-    String method = rule.getMethod();
-    boolean methodMatches =
-        method == null
-            || method.isBlank()
-            || HttpMethod.valueOf(method).equals(exchange.getRequest().getMethod());
-    PathPattern pathPattern = pathPatternParser.parse(rule.getPath());
+  private boolean matches(GatewayRouteRule.Route rule, ServerWebExchange exchange) {
+    boolean methodMatches = rule.method().equals(exchange.getRequest().getMethod());
     boolean pathMatches =
-        pathPattern.matches(PathContainer.parsePath(exchange.getRequest().getPath().value()));
+        pathPatternParser
+            .parse(rule.path())
+            .matches(PathContainer.parsePath(exchange.getRequest().getPath().value()));
     return methodMatches && pathMatches;
-  }
-
-  private void validateRules(List<GatewaySecurityProperties.RouteRule> rules) {
-    rules.forEach(
-        rule -> {
-          if (rule.getPath() == null || rule.getPath().isBlank()) {
-            throw new IllegalArgumentException("Gateway route rule phải có path");
-          }
-          if (rule.getMethod() != null && !rule.getMethod().isBlank()) {
-            HttpMethod.valueOf(rule.getMethod());
-          }
-          pathPatternParser.parse(rule.getPath());
-        });
   }
 }
