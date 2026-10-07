@@ -12,6 +12,9 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
@@ -20,6 +23,8 @@ import java.time.Instant;
         @UniqueConstraint(name = "uk_categories_code", columnNames = "code"),
         @UniqueConstraint(name = "uk_categories_slug", columnNames = "slug")
 })
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Category {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,8 +46,6 @@ public class Category {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected Category() { }
-
     public Category(String code, String name, String slug) {
         this.code = code;
         this.name = name;
@@ -51,12 +54,6 @@ public class Category {
 
     @PrePersist void onCreate() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
-    public Long getId() { return id; }
-    public String getCode() { return code; }
-    public String getName() { return name; }
-    public String getSlug() { return slug; }
-    public CatalogStatus getStatus() { return status; }
-    public Long getVersion() { return version; }
     public void update(String name, String slug) { this.name = name; this.slug = slug; }
     public void changeStatus(CatalogStatus status) { this.status = status; }
 }

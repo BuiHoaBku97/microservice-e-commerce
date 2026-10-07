@@ -16,6 +16,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,6 +26,8 @@ import java.util.List;
 
 @Entity
 @Table(name = "products")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,8 +53,6 @@ public class Product {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected Product() { }
-
     public Product(Category category, String name, String description, List<String> imageUrls) {
         this.category = category;
         this.name = name;
@@ -59,13 +62,7 @@ public class Product {
 
     @PrePersist void onCreate() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
-    public Long getId() { return id; }
-    public Category getCategory() { return category; }
-    public String getName() { return name; }
-    public String getDescription() { return description; }
     public List<String> getImageUrls() { return List.copyOf(imageUrls); }
-    public CatalogStatus getStatus() { return status; }
-    public Long getVersion() { return version; }
     public void update(Category category, String name, String description, List<String> imageUrls) { this.category = category; this.name = name; this.description = description; this.imageUrls = new ArrayList<>(imageUrls); }
     public void changeStatus(CatalogStatus status) { this.status = status; }
 }

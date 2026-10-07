@@ -15,11 +15,16 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "skus", uniqueConstraints = @UniqueConstraint(name = "uk_skus_code", columnNames = "code"))
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Sku {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,8 +53,6 @@ public class Sku {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected Sku() { }
-
     public Sku(Product product, String code, String color, String size, Long price) {
         this.product = product;
         this.code = code;
@@ -60,15 +63,6 @@ public class Sku {
 
     @PrePersist void onCreate() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
-    public Long getId() { return id; }
-    public Product getProduct() { return product; }
-    public String getCode() { return code; }
-    public String getColor() { return color; }
-    public String getSize() { return size; }
-    public Long getPrice() { return price; }
-    public String getCurrency() { return currency; }
-    public CatalogStatus getStatus() { return status; }
-    public Long getVersion() { return version; }
     public void update(Long price, String color, String size) { this.price = price; this.color = color; this.size = size; }
     public void changeStatus(CatalogStatus status) { this.status = status; }
 }

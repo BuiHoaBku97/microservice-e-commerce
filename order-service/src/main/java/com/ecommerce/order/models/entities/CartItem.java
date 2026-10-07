@@ -8,10 +8,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import java.time.Instant;
 
 @Entity
 @Table(name = "cart_items", uniqueConstraints = @UniqueConstraint(name = "uk_cart_items_sku", columnNames = {"cart_id", "sku_id"}))
+@Getter
+@Setter
+@NoArgsConstructor
 public class CartItem {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -23,14 +29,5 @@ public class CartItem {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public Long getId() { return id; }
-    public Cart getCart() { return cart; }
-    public void setCart(Cart cart) { this.cart = cart; }
-    public Long getSkuId() { return skuId; }
-    public void setSkuId(Long skuId) { this.skuId = skuId; }
-    public Integer getQuantity() { return quantity; }
-    public void setQuantity(Integer quantity) { this.quantity = quantity; }
-    public Long getDisplayedUnitPrice() { return displayedUnitPrice; }
-    public void setDisplayedUnitPrice(Long displayedUnitPrice) { this.displayedUnitPrice = displayedUnitPrice; }
     public void touch() { if (createdAt == null) createdAt = Instant.now(); updatedAt = Instant.now(); }
 }
