@@ -86,9 +86,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "8081:8081"
-
   catalog-service:
     build:
       context: ./catalog-service
@@ -107,9 +104,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8082:8082"
-
   order-service:
     build:
       context: ./order-service
@@ -125,9 +119,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8083:8083"
-
   payment-service:
     build:
       context: ./payment-service
@@ -143,9 +134,6 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
-    ports:
-      - "8084:8084"
-
   notification-service:
     build:
       context: ./notification-service
@@ -161,9 +149,6 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
-    ports:
-      - "8085:8085"
-
   gateway:
     build:
       context: ./gateway
