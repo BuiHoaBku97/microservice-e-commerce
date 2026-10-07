@@ -11,8 +11,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.beans.factory.annotation.Value;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
@@ -31,7 +29,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**", "/.well-known/jwks.json", "/actuator/health").permitAll()
+                        .requestMatchers("/api/v1/auth/**", "/actuator/health").permitAll()
                         .anyRequest().authenticated())
                 .build();
     }
@@ -43,36 +41,21 @@ public class SecurityConfig {
 
     @Bean
     KeyPair jwtKeyPair(
-            @Value("${security.jwt.private-key-path:./secrets/jwt-private-key.pem}") String privateKeyPath,
-            @Value("${security.jwt.public-key-path:./secrets/jwt-public-key.pem}") String publicKeyPath) throws Exception {
-        PrivateKey privateKey = readPrivateKey(resolveSecretPath(privateKeyPath));
-        PublicKey publicKey = readPublicKey(resolveSecretPath(publicKeyPath));
+            @Value("${security.jwt.private-key-base64}") String privateKeyBase64,
+            @Value("${security.jwt.public-key-base64}") String publicKeyBase64) throws Exception {
+        PrivateKey privateKey = readPrivateKey(privateKeyBase64);
+        PublicKey publicKey = readPublicKey(publicKeyBase64);
         return new KeyPair(publicKey, privateKey);
     }
 
-    private Path resolveSecretPath(String configuredPath) {
-        Path path = Path.of(configuredPath);
-        if (Files.exists(path)) return path;
-        Path parentProjectPath = Path.of("..").resolve(path).normalize();
-        if (Files.exists(parentProjectPath)) return parentProjectPath;
-        return path;
-    }
-
-    private PrivateKey readPrivateKey(Path path) throws Exception {
+    private PrivateKey readPrivateKey(String keyBase64) throws Exception {
         return KeyFactory.getInstance("RSA").generatePrivate(
-                new PKCS8EncodedKeySpec(decodePem(Files.readString(path), "PRIVATE KEY")));
+                new PKCS8EncodedKeySpec(Base64.getDecoder().decode(keyBase64)));
     }
 
-    private PublicKey readPublicKey(Path path) throws Exception {
+    private PublicKey readPublicKey(String keyBase64) throws Exception {
         return KeyFactory.getInstance("RSA").generatePublic(
-                new X509EncodedKeySpec(decodePem(Files.readString(path), "PUBLIC KEY")));
-    }
-
-    private byte[] decodePem(String pem, String type) {
-        String body = pem.replace("-----BEGIN " + type + "-----", "")
-                .replace("-----END " + type + "-----", "")
-                .replaceAll("\\s", "");
-        return Base64.getDecoder().decode(body);
+                new X509EncodedKeySpec(Base64.getDecoder().decode(keyBase64)));
     }
 
 }

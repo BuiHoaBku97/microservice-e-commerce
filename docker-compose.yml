@@ -83,10 +83,6 @@ services:
       IDENTITY_DB_URL: jdbc:postgresql://postgres:5432/identity_db
       IDENTITY_DB_USERNAME: identity_user
       IDENTITY_DB_PASSWORD: identity_password
-      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private-key.pem
-      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public-key.pem
-    volumes:
-      - ./secrets:/run/secrets:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,5 +1,4 @@
 .ai
-secrets/*.pem
 .idea/
 *.iml
 .gradle/
