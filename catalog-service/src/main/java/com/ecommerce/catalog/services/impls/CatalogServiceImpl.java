@@ -6,7 +6,7 @@ import com.ecommerce.catalog.models.dtos.requests.CreateSkuRequest;
 import com.ecommerce.catalog.models.dtos.responses.CategoryResponse;
 import com.ecommerce.catalog.models.dtos.responses.ProductResponse;
 import com.ecommerce.catalog.models.dtos.responses.SkuResponse;
-import com.ecommerce.catalog.models.entities.CatalogStatus;
+import com.ecommerce.catalog.models.entities.Status;
 import com.ecommerce.catalog.models.entities.Category;
 import com.ecommerce.catalog.models.entities.Product;
 import com.ecommerce.catalog.models.entities.Sku;
@@ -47,7 +47,7 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> listActiveCategories() {
-        return categoryRepository.findByStatusOrderByNameAsc(CatalogStatus.ACTIVE).stream()
+        return categoryRepository.findByStatusOrderByNameAsc(Status.ACTIVE).stream()
                 .map(this::toResponse).toList();
     }
 
@@ -78,9 +78,9 @@ public class CatalogServiceImpl implements CatalogService {
     @Transactional(readOnly = true)
     public ProductResponse getPublicProduct(Long productId) {
         Product product = productRepository.findById(productId)
-                .filter(value -> value.getStatus() == CatalogStatus.ACTIVE)
+                .filter(value -> value.getStatus() == Status.ACTIVE)
                 .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
-        List<Sku> skus = skuRepository.findByProductIdAndStatusOrderByIdAsc(productId, CatalogStatus.ACTIVE);
+        List<Sku> skus = skuRepository.findByProductIdAndStatusOrderByIdAsc(productId, Status.ACTIVE);
         if (skus.isEmpty()) {
             throw new IllegalArgumentException("PRODUCT_NOT_FOUND");
         }
@@ -92,12 +92,12 @@ public class CatalogServiceImpl implements CatalogService {
     public List<ProductResponse> searchPublicProducts(String keyword) {
         String normalized = keyword == null ? "" : keyword.trim();
         return (normalized.isBlank()
-                ? productRepository.findByStatusOrderByNameAsc(CatalogStatus.ACTIVE)
-                : productRepository.findByStatusAndNameContainingIgnoreCaseOrderByNameAsc(CatalogStatus.ACTIVE, normalized))
+                ? productRepository.findByStatusOrderByNameAsc(Status.ACTIVE)
+                : productRepository.findByStatusAndNameContainingIgnoreCaseOrderByNameAsc(Status.ACTIVE, normalized))
                 .stream()
                 .map(product -> new ProductResponse(product.getId(), product.getName(), product.getDescription(),
                         product.getCategory().getId(), product.getImageUrls(), product.getStatus(), product.getVersion(),
-                        skuRepository.findByProductIdAndStatusOrderByIdAsc(product.getId(), CatalogStatus.ACTIVE)
+                        skuRepository.findByProductIdAndStatusOrderByIdAsc(product.getId(), Status.ACTIVE)
                                 .stream().map(this::toResponse).toList()))
                 .filter(product -> !product.skus().isEmpty())
                 .toList();

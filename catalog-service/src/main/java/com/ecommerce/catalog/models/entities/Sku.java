@@ -44,7 +44,7 @@ public class Sku {
     private String currency = "VND";
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private CatalogStatus status = CatalogStatus.ACTIVE;
+    private Status status = Status.ACTIVE;
     @Version
     @Column(nullable = false)
     private Long version;
@@ -64,5 +64,5 @@ public class Sku {
     @PrePersist void onCreate() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
     public void update(Long price, String color, String size) { this.price = price; this.color = color; this.size = size; }
-    public void changeStatus(CatalogStatus status) { this.status = status; }
+    public void changeStatus(Status status) { this.status = status; }
 }

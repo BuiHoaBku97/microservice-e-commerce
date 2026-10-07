@@ -37,7 +37,7 @@ public class Category {
     private String slug;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private CatalogStatus status = CatalogStatus.ACTIVE;
+    private Status status = Status.ACTIVE;
     @Version
     @Column(nullable = false)
     private Long version;
@@ -55,5 +55,5 @@ public class Category {
     @PrePersist void onCreate() { Instant now = Instant.now(); createdAt = now; updatedAt = now; }
     @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
     public void update(String name, String slug) { this.name = name; this.slug = slug; }
-    public void changeStatus(CatalogStatus status) { this.status = status; }
+    public void changeStatus(Status status) { this.status = status; }
 }

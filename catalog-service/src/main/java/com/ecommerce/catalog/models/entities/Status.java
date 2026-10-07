@@ -1,6 +1,6 @@
 package com.ecommerce.catalog.models.entities;
 
-public enum CatalogStatus {
+public enum Status {
     DRAFT,
     ACTIVE,
     INACTIVE

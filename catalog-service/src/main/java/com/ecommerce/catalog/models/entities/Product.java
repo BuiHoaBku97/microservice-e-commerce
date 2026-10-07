@@ -44,7 +44,7 @@ public class Product {
     private List<String> imageUrls = new ArrayList<>();
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private CatalogStatus status = CatalogStatus.DRAFT;
+    private Status status = Status.DRAFT;
     @Version
     @Column(nullable = false)
     private Long version;
@@ -64,5 +64,5 @@ public class Product {
     @PreUpdate void onUpdate() { updatedAt = Instant.now(); }
     public List<String> getImageUrls() { return List.copyOf(imageUrls); }
     public void update(Category category, String name, String description, List<String> imageUrls) { this.category = category; this.name = name; this.description = description; this.imageUrls = new ArrayList<>(imageUrls); }
-    public void changeStatus(CatalogStatus status) { this.status = status; }
+    public void changeStatus(Status status) { this.status = status; }
 }
