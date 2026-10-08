@@ -2,13 +2,15 @@ package com.ecommerce.order.controllers;
 
 import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.models.entities.Cart;
+import com.ecommerce.order.models.entities.Order;
+import com.ecommerce.order.models.entities.OrderItem;
 import com.ecommerce.order.services.CartService;
 import com.ecommerce.order.services.InventoryService;
+import com.ecommerce.order.services.OrderService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -24,20 +26,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
   private final CartService carts;
   private final InventoryService inventory;
+  private final OrderService orders;
 
-  public OrderController(CartService carts, InventoryService inventory) {
+  public OrderController(CartService carts, InventoryService inventory, OrderService orders) {
     this.carts = carts;
     this.inventory = inventory;
+    this.orders = orders;
   }
 
   @GetMapping("/cart")
-  public CartDtos.CartResponse cart(@AuthenticationPrincipal Authentication authentication) {
+  public CartDtos.CartResponse cart(Authentication authentication) {
     return response(carts.getOrCreate(userId(authentication)));
   }
 
   @PostMapping("/cart/items")
   public CartDtos.CartResponse add(
-      @AuthenticationPrincipal Authentication authentication,
+      Authentication authentication,
       @RequestParam Long version,
       @Valid @RequestBody CartDtos.CartItemRequest request) {
     return response(carts.add(userId(authentication), request, version));
@@ -45,7 +49,7 @@ public class OrderController {
 
   @PatchMapping("/cart/items/{skuId}")
   public CartDtos.CartResponse update(
-      @AuthenticationPrincipal Authentication authentication,
+      Authentication authentication,
       @PathVariable Long skuId,
       @RequestParam Long version,
       @Valid @RequestBody CartDtos.CartItemRequest request) {
@@ -54,17 +58,35 @@ public class OrderController {
 
   @DeleteMapping("/cart/items/{skuId}")
   public CartDtos.CartResponse remove(
-      @AuthenticationPrincipal Authentication authentication,
-      @PathVariable Long skuId,
-      @RequestParam Long version) {
+      Authentication authentication, @PathVariable Long skuId, @RequestParam Long version) {
     return response(carts.remove(userId(authentication), skuId, version));
   }
 
   @DeleteMapping("/cart")
-  public ResponseEntity<Void> clear(
-      @AuthenticationPrincipal Authentication authentication, @RequestParam Long version) {
+  public ResponseEntity<Void> clear(Authentication authentication, @RequestParam Long version) {
     carts.clear(userId(authentication), version);
     return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/orders")
+  public CartDtos.OrderResponse createOrder(Authentication authentication) {
+    return orderResponse(orders.createFromCart(userId(authentication)));
+  }
+
+  @GetMapping("/orders")
+  public List<CartDtos.OrderResponse> orders(Authentication authentication) {
+    return orders.listByUser(userId(authentication)).stream().map(this::orderResponse).toList();
+  }
+
+  @GetMapping("/orders/{orderId}")
+  public CartDtos.OrderResponse order(Authentication authentication, @PathVariable Long orderId) {
+    return orderResponse(orders.getByUser(userId(authentication), orderId));
+  }
+
+  @PatchMapping("/orders/{orderId}/cancel")
+  public CartDtos.OrderResponse cancelOrder(
+      Authentication authentication, @PathVariable Long orderId) {
+    return orderResponse(orders.cancel(userId(authentication), orderId));
   }
 
   @GetMapping("/inventory/availability")
@@ -114,5 +136,22 @@ public class OrderController {
         i.getReserved(),
         i.getOnHand() - i.getReserved(),
         i.getVersion());
+  }
+
+  private CartDtos.OrderResponse orderResponse(Order order) {
+    return new CartDtos.OrderResponse(
+        order.getId(),
+        order.getUserId(),
+        order.getStatus(),
+        order.getTotalAmount(),
+        order.getCurrency(),
+        order.getVersion(),
+        order.getCreatedAt(),
+        order.getItems().stream().map(this::orderItemResponse).toList());
+  }
+
+  private CartDtos.OrderItemResponse orderItemResponse(OrderItem item) {
+    return new CartDtos.OrderItemResponse(
+        item.getSkuId(), item.getQuantity(), item.getUnitPrice(), item.getLineTotal());
   }
 }

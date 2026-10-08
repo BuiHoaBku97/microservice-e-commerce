@@ -70,6 +70,46 @@ public class InventoryService {
     return inventories.save(inventory);
   }
 
+  @Transactional
+  public void reserve(Map<Long, Integer> quantities) {
+    List<Inventory> inventoryList =
+        inventories.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
+    Map<Long, Inventory> bySkuId =
+        inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
+    if (!bySkuId.keySet().containsAll(quantities.keySet())) {
+      throw new IllegalArgumentException("SKU chưa được khởi tạo tồn kho");
+    }
+    quantities.forEach(
+        (skuId, quantity) -> {
+          Inventory inventory = bySkuId.get(skuId);
+          int available = inventory.getOnHand() - inventory.getReserved();
+          if (available < quantity) {
+            throw new IllegalStateException("Sản phẩm không đủ tồn kho");
+          }
+          inventory.setReserved(inventory.getReserved() + quantity);
+          inventory.setVersion(inventory.getVersion() + 1);
+          inventory.setUpdatedAt(Instant.now());
+        });
+  }
+
+  @Transactional
+  public void release(Map<Long, Integer> quantities) {
+    List<Inventory> inventoryList =
+        inventories.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
+    Map<Long, Inventory> bySkuId =
+        inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
+    quantities.forEach(
+        (skuId, quantity) -> {
+          Inventory inventory = bySkuId.get(skuId);
+          if (inventory == null || inventory.getReserved() < quantity) {
+            throw new IllegalStateException("INVALID_INVENTORY_RESERVATION");
+          }
+          inventory.setReserved(inventory.getReserved() - quantity);
+          inventory.setVersion(inventory.getVersion() + 1);
+          inventory.setUpdatedAt(Instant.now());
+        });
+  }
+
   private CartDtos.InventoryResponse response(Long id, Inventory inventory) {
     if (inventory == null) return new CartDtos.InventoryResponse(id, 0, 0, 0, 0L);
     return new CartDtos.InventoryResponse(

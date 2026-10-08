@@ -1,8 +1,10 @@
 package com.ecommerce.order.models.dtos;
 
+import com.ecommerce.order.models.entities.OrderStatus;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import java.time.Instant;
 import java.util.List;
 
 public final class CartDtos {
@@ -21,4 +23,16 @@ public final class CartDtos {
       Long skuId, Integer onHand, Integer reserved, Integer available, Long version) {}
 
   public record InventoryMutationRequest(@NotNull Integer quantity, String reason, Long version) {}
+
+  public record OrderResponse(
+      Long id,
+      Long userId,
+      OrderStatus status,
+      Long totalAmount,
+      String currency,
+      Long version,
+      Instant createdAt,
+      List<OrderItemResponse> items) {}
+
+  public record OrderItemResponse(Long skuId, Integer quantity, Long unitPrice, Long lineTotal) {}
 }
