@@ -3,9 +3,40 @@ spring:
     name: payment-service
   profiles:
     default: local
+  datasource:
+    url: ${PAYMENT_DB_URL:jdbc:postgresql://localhost:5433/payment_db}
+    username: ${PAYMENT_DB_USERNAME:payment_user}
+    password: ${PAYMENT_DB_PASSWORD:payment_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${PAYMENT_KAFKA_GROUP_ID:payment-service}
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  security:
+    jwt:
+      public-key-base64: ${JWT_PUBLIC_KEY_BASE64:MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwavlvOpZtedOU1aJLAJD612jceVjo/6yyv2VSxJOc0Z4kcluOAh70wyqj5pT1z7HVhvQ6M1p/JjXVd/JwlwXoNWmdIkMR5PBxLlNHC9LawOw6/etWaFMwYJHxnppXLUHGP8pbj4x8h2W+HvBbPYgvikPTz32kflhwk7+sm4UI4x33IOElEscg1jcybNvobYN4Qu2CDNQ24AIsKOwRwrI+372F/uw3xqiwCTeJpoDb/KQp6Bzi5MOo4aOCJNBnjcepM+f0OeR6AZdDUmyEJ7UdFeU1kZscD2dF2AIM5ppkZfcGi5S+N/1OoF0yw0pZ+PvepLTT+aCTVIixdxeQ9XaKQIDAQAB}
 
 server:
   port: 8084
+
+app:
+  kafka:
+    topics:
+      order-events: ${ORDER_EVENTS_TOPIC:ecommerce.order.events}
+      payment-events: ${PAYMENT_EVENTS_TOPIC:ecommerce.payment.events}
+  outbox:
+    publish-delay-ms: ${OUTBOX_PUBLISH_DELAY_MS:5000}
 
 eureka:
   client:
