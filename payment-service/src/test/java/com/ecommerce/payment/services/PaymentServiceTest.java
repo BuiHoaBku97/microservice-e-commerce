@@ -18,47 +18,49 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
-  @Mock private PaymentRepository payments;
-  @Mock private PaymentEventService events;
+  @Mock private PaymentRepository paymentRepository;
+  @Mock private PaymentEventService paymentEventService;
 
   @InjectMocks private PaymentService service;
 
   @Test
   void shouldCompleteValidOrderPayment() {
-    when(payments.findByOrderId(10L)).thenReturn(Optional.empty());
-    when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(paymentRepository.findByOrderId(10L)).thenReturn(Optional.empty());
+    when(paymentRepository.save(any(Payment.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     Payment payment =
         service.processOrderPayment(new OrderCreatedEvent(10L, 20L, 100_000L, "VND"));
 
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
     assertThat(payment.getProviderReference()).isEqualTo("SIMULATED-10");
-    verify(events).enqueuePaymentResult(payment);
+    verify(paymentEventService).enqueuePaymentResult(payment);
   }
 
   @Test
   void shouldReturnExistingPaymentWhenOrderEventIsDuplicated() {
     Payment existing = new Payment(10L, 20L, 100_000L, "VND");
     existing.complete("SIMULATED-10");
-    when(payments.findByOrderId(10L)).thenReturn(Optional.of(existing));
+    when(paymentRepository.findByOrderId(10L)).thenReturn(Optional.of(existing));
 
     Payment payment =
         service.processOrderPayment(new OrderCreatedEvent(10L, 20L, 100_000L, "VND"));
 
     assertThat(payment).isSameAs(existing);
-    verify(payments, never()).save(any(Payment.class));
-    verify(events, never()).enqueuePaymentResult(any(Payment.class));
+    verify(paymentRepository, never()).save(any(Payment.class));
+    verify(paymentEventService, never()).enqueuePaymentResult(any(Payment.class));
   }
 
   @Test
   void shouldFailPaymentWhenAmountIsInvalid() {
-    when(payments.findByOrderId(10L)).thenReturn(Optional.empty());
-    when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(paymentRepository.findByOrderId(10L)).thenReturn(Optional.empty());
+    when(paymentRepository.save(any(Payment.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     Payment payment = service.processOrderPayment(new OrderCreatedEvent(10L, 20L, 0L, "VND"));
 
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
     assertThat(payment.getFailureReason()).isEqualTo("Số tiền thanh toán không hợp lệ");
-    verify(events).enqueuePaymentResult(payment);
+    verify(paymentEventService).enqueuePaymentResult(payment);
   }
 }

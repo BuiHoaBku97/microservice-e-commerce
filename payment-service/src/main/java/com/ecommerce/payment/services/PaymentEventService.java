@@ -11,11 +11,12 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PaymentEventService {
-  private final OutboxEventRepository events;
+  private final OutboxEventRepository outboxEventRepository;
   private final ObjectMapper objectMapper;
 
-  public PaymentEventService(OutboxEventRepository events, ObjectMapper objectMapper) {
-    this.events = events;
+  public PaymentEventService(
+      OutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
+    this.outboxEventRepository = outboxEventRepository;
     this.objectMapper = objectMapper;
   }
 
@@ -45,7 +46,7 @@ public class PaymentEventService {
                   payment.getProviderReference() == null ? "" : payment.getProviderReference(),
                   "failureReason",
                   payment.getFailureReason() == null ? "" : payment.getFailureReason()));
-      events.save(new OutboxEvent("Payment", payment.getId(), eventType, payload));
+      outboxEventRepository.save(new OutboxEvent("Payment", payment.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Không thể tạo sự kiện thanh toán", exception);
     }

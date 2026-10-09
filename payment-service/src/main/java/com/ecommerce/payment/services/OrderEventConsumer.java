@@ -8,11 +8,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class OrderEventConsumer {
   private final ObjectMapper objectMapper;
-  private final PaymentService payments;
+  private final PaymentService paymentService;
 
-  public OrderEventConsumer(ObjectMapper objectMapper, PaymentService payments) {
+  public OrderEventConsumer(ObjectMapper objectMapper, PaymentService paymentService) {
     this.objectMapper = objectMapper;
-    this.payments = payments;
+    this.paymentService = paymentService;
   }
 
   @KafkaListener(
@@ -22,7 +22,7 @@ public class OrderEventConsumer {
     try {
       JsonNode payload = objectMapper.readTree(message);
       if ("OrderCreated".equals(payload.path("eventType").asText())) {
-        payments.processOrderPayment(OrderCreatedEvent.from(payload));
+        paymentService.processOrderPayment(OrderCreatedEvent.from(payload));
       }
     } catch (Exception exception) {
       throw new IllegalStateException("Không thể xử lý sự kiện đơn hàng", exception);

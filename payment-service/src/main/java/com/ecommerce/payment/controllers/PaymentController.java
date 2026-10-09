@@ -10,15 +10,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/payments")
 public class PaymentController {
-  private final PaymentService payments;
+  private final PaymentService paymentService;
 
-  public PaymentController(PaymentService payments) {
-    this.payments = payments;
+  public PaymentController(PaymentService paymentService) {
+    this.paymentService = paymentService;
   }
 
   @GetMapping("/orders/{orderId}")
   public PaymentResponse byOrder(@PathVariable Long orderId) {
-    return PaymentResponse.from(payments.getByOrderId(orderId));
+    return PaymentResponse.from(paymentService.getByOrderId(orderId));
   }
 
   public record PaymentResponse(

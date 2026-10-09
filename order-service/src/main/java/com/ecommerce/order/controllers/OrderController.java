@@ -24,19 +24,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1")
 public class OrderController {
-  private final CartService carts;
-  private final InventoryService inventory;
-  private final OrderService orders;
+  private final CartService cartService;
+  private final InventoryService inventoryService;
+  private final OrderService orderService;
 
-  public OrderController(CartService carts, InventoryService inventory, OrderService orders) {
-    this.carts = carts;
-    this.inventory = inventory;
-    this.orders = orders;
+  public OrderController(
+      CartService cartService, InventoryService inventoryService, OrderService orderService) {
+    this.cartService = cartService;
+    this.inventoryService = inventoryService;
+    this.orderService = orderService;
   }
 
   @GetMapping("/cart")
   public CartDtos.CartResponse cart(Authentication authentication) {
-    return response(carts.getOrCreate(userId(authentication)));
+    return response(cartService.getOrCreate(userId(authentication)));
   }
 
   @PostMapping("/cart/items")
@@ -44,7 +45,7 @@ public class OrderController {
       Authentication authentication,
       @RequestParam Long version,
       @Valid @RequestBody CartDtos.CartItemRequest request) {
-    return response(carts.add(userId(authentication), request, version));
+    return response(cartService.add(userId(authentication), request, version));
   }
 
   @PatchMapping("/cart/items/{skuId}")
@@ -53,63 +54,63 @@ public class OrderController {
       @PathVariable Long skuId,
       @RequestParam Long version,
       @Valid @RequestBody CartDtos.CartItemRequest request) {
-    return response(carts.update(userId(authentication), skuId, request, version));
+    return response(cartService.update(userId(authentication), skuId, request, version));
   }
 
   @DeleteMapping("/cart/items/{skuId}")
   public CartDtos.CartResponse remove(
       Authentication authentication, @PathVariable Long skuId, @RequestParam Long version) {
-    return response(carts.remove(userId(authentication), skuId, version));
+    return response(cartService.remove(userId(authentication), skuId, version));
   }
 
   @DeleteMapping("/cart")
   public ResponseEntity<Void> clear(Authentication authentication, @RequestParam Long version) {
-    carts.clear(userId(authentication), version);
+    cartService.clear(userId(authentication), version);
     return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/orders")
   public CartDtos.OrderResponse createOrder(Authentication authentication) {
-    return orderResponse(orders.createFromCart(userId(authentication)));
+    return orderResponse(orderService.createFromCart(userId(authentication)));
   }
 
   @GetMapping("/orders")
-  public List<CartDtos.OrderResponse> orders(Authentication authentication) {
-    return orders.listByUser(userId(authentication)).stream().map(this::orderResponse).toList();
+  public List<CartDtos.OrderResponse> listOrders(Authentication authentication) {
+    return orderService.listByUser(userId(authentication)).stream().map(this::orderResponse).toList();
   }
 
   @GetMapping("/orders/{orderId}")
   public CartDtos.OrderResponse order(Authentication authentication, @PathVariable Long orderId) {
-    return orderResponse(orders.getByUser(userId(authentication), orderId));
+    return orderResponse(orderService.getByUser(userId(authentication), orderId));
   }
 
   @PatchMapping("/orders/{orderId}/cancel")
   public CartDtos.OrderResponse cancelOrder(
       Authentication authentication, @PathVariable Long orderId) {
-    return orderResponse(orders.cancel(userId(authentication), orderId));
+    return orderResponse(orderService.cancel(userId(authentication), orderId));
   }
 
   @GetMapping("/inventory/availability")
   public List<CartDtos.InventoryResponse> availability(@RequestParam List<Long> skuIds) {
     if (skuIds.size() > 100) throw new IllegalArgumentException("Chỉ được kiểm tra tối đa 100 SKU");
-    return inventory.availability(skuIds);
+    return inventoryService.availability(skuIds);
   }
 
   @PostMapping("/admin/inventory/{skuId}/initialize")
   public CartDtos.InventoryResponse initialize(@PathVariable Long skuId) {
-    return toInventory(inventory.initialize(skuId));
+    return toInventory(inventoryService.initialize(skuId));
   }
 
   @PostMapping("/admin/inventory/{skuId}/receipts")
   public CartDtos.InventoryResponse receipt(
       @PathVariable Long skuId, @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
-    return toInventory(inventory.receipt(skuId, request));
+    return toInventory(inventoryService.receipt(skuId, request));
   }
 
   @PostMapping("/admin/inventory/{skuId}/adjustments")
   public CartDtos.InventoryResponse adjustment(
       @PathVariable Long skuId, @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
-    return toInventory(inventory.adjustment(skuId, request));
+    return toInventory(inventoryService.adjustment(skuId, request));
   }
 
   private Long userId(Authentication authentication) {

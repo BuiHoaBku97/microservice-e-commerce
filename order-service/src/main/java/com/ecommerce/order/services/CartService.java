@@ -10,22 +10,22 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class CartService {
-  private final CartRepository carts;
+  private final CartRepository cartRepository;
 
-  public CartService(CartRepository carts) {
-    this.carts = carts;
+  public CartService(CartRepository cartRepository) {
+    this.cartRepository = cartRepository;
   }
 
   @Transactional
   public Cart getOrCreate(Long userId) {
-    return carts
+    return cartRepository
         .findByUserId(userId)
         .orElseGet(
             () -> {
               Cart cart = new Cart();
               cart.setUserId(userId);
               cart.touch();
-              return carts.save(cart);
+              return cartRepository.save(cart);
             });
   }
 
@@ -54,7 +54,7 @@ public class CartService {
       item.touch();
     }
     cart.touch();
-    return carts.save(cart);
+    return cartRepository.save(cart);
   }
 
   @Transactional
@@ -70,7 +70,7 @@ public class CartService {
     item.setDisplayedUnitPrice(request.displayedUnitPrice());
     item.touch();
     cart.touch();
-    return carts.save(cart);
+    return cartRepository.save(cart);
   }
 
   @Transactional
@@ -78,7 +78,7 @@ public class CartService {
     Cart cart = checkedCart(userId, expectedVersion);
     cart.getItems().removeIf(i -> Objects.equals(i.getSkuId(), skuId));
     cart.touch();
-    return carts.save(cart);
+    return cartRepository.save(cart);
   }
 
   @Transactional

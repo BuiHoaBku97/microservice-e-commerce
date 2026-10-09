@@ -13,22 +13,22 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class InventoryService {
-  private final InventoryRepository inventories;
+  private final InventoryRepository inventoryRepository;
 
-  public InventoryService(InventoryRepository inventories) {
-    this.inventories = inventories;
+  public InventoryService(InventoryRepository inventoryRepository) {
+    this.inventoryRepository = inventoryRepository;
   }
 
   public List<CartDtos.InventoryResponse> availability(List<Long> skuIds) {
     Map<Long, Inventory> byId =
-        inventories.findBySkuIdIn(skuIds).stream()
+        inventoryRepository.findBySkuIdIn(skuIds).stream()
             .collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
     return skuIds.stream().distinct().map(id -> response(id, byId.get(id))).toList();
   }
 
   @Transactional
   public Inventory initialize(Long skuId) {
-    return inventories
+    return inventoryRepository
         .findById(skuId)
         .orElseGet(
             () -> {
@@ -36,7 +36,7 @@ public class InventoryService {
               inventory.setSkuId(skuId);
               inventory.setCreatedAt(Instant.now());
               inventory.setUpdatedAt(Instant.now());
-              return inventories.save(inventory);
+              return inventoryRepository.save(inventory);
             });
   }
 
@@ -48,13 +48,13 @@ public class InventoryService {
     inventory.setOnHand(inventory.getOnHand() + request.quantity());
     inventory.setVersion(inventory.getVersion() + 1);
     inventory.setUpdatedAt(Instant.now());
-    return inventories.save(inventory);
+    return inventoryRepository.save(inventory);
   }
 
   @Transactional
   public Inventory adjustment(Long skuId, CartDtos.InventoryMutationRequest request) {
     Inventory inventory =
-        inventories
+            inventoryRepository
             .findById(skuId)
             .orElseThrow(() -> new IllegalArgumentException("SKU chưa được khởi tạo tồn kho"));
     if (request.quantity() == null || request.quantity() == 0)
@@ -67,13 +67,13 @@ public class InventoryService {
     inventory.setOnHand(next);
     inventory.setVersion(inventory.getVersion() + 1);
     inventory.setUpdatedAt(Instant.now());
-    return inventories.save(inventory);
+    return inventoryRepository.save(inventory);
   }
 
   @Transactional
   public void reserve(Map<Long, Integer> quantities) {
     List<Inventory> inventoryList =
-        inventories.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
+        inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
     Map<Long, Inventory> bySkuId =
         inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
     if (!bySkuId.keySet().containsAll(quantities.keySet())) {
@@ -95,7 +95,7 @@ public class InventoryService {
   @Transactional
   public void release(Map<Long, Integer> quantities) {
     List<Inventory> inventoryList =
-        inventories.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
+        inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
     Map<Long, Inventory> bySkuId =
         inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
     quantities.forEach(

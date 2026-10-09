@@ -21,71 +21,73 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
-  @Mock private OrderRepository orders;
-  @Mock private CartService carts;
-  @Mock private InventoryService inventory;
-  @Mock private OutboxEventService outbox;
+  @Mock private OrderRepository orderRepository;
+  @Mock private CartService cartService;
+  @Mock private InventoryService inventoryService;
+  @Mock private OutboxEventService outboxEventService;
 
   private OrderService orderService;
 
   @BeforeEach
   void setUp() {
-    orderService = new OrderService(orders, carts, inventory, outbox);
+    orderService =
+        new OrderService(orderRepository, cartService, inventoryService, outboxEventService);
   }
 
   @Test
   void createFromCart_shouldCreateOrderAndReserveInventory() {
     Cart cart = cartWithItem(10L, 2, 150_000L);
-    when(carts.getOrCreate(7L)).thenReturn(cart);
-    when(orders.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    when(cartService.getOrCreate(7L)).thenReturn(cart);
+    when(orderRepository.save(any(Order.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     Order order = orderService.createFromCart(7L);
 
     assertEquals(300_000L, order.getTotalAmount());
     assertEquals(1, order.getItems().size());
-    verify(inventory).reserve(Map.of(10L, 2));
-    verify(outbox).enqueueOrderCreated(any(Order.class));
-    verify(carts).clear(eq(7L), eq(cart.getVersion()));
+    verify(inventoryService).reserve(Map.of(10L, 2));
+    verify(outboxEventService).enqueueOrderCreated(any(Order.class));
+    verify(cartService).clear(eq(7L), eq(cart.getVersion()));
   }
 
   @Test
   void cancel_shouldReleaseInventoryAndChangeStatus() {
     Order order = new Order(7L, 300_000L, "VND");
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
-    when(orders.findByIdAndUserId(3L, 7L)).thenReturn(Optional.of(order));
-    when(orders.save(order)).thenReturn(order);
+    when(orderRepository.findByIdAndUserId(3L, 7L)).thenReturn(Optional.of(order));
+    when(orderRepository.save(order)).thenReturn(order);
 
     Order cancelled = orderService.cancel(7L, 3L);
 
     assertEquals("CANCELLED", cancelled.getStatus().name());
-    verify(inventory).release(Map.of(10L, 2));
-    verify(outbox).enqueueOrderCancelled(order);
-    verify(orders).save(order);
+    verify(inventoryService).release(Map.of(10L, 2));
+    verify(outboxEventService).enqueueOrderCancelled(order);
+    verify(orderRepository).save(order);
   }
 
   @Test
   void handlePaymentCompleted_shouldMarkOrderAsPaid() {
     Order order = new Order(7L, 300_000L, "VND");
-    when(orders.findById(3L)).thenReturn(Optional.of(order));
-    when(orders.save(order)).thenReturn(order);
+    when(orderRepository.findById(3L)).thenReturn(Optional.of(order));
+    when(orderRepository.save(order)).thenReturn(order);
 
     Order paid = orderService.handlePaymentCompleted(3L);
 
     assertEquals(OrderStatus.PAID, paid.getStatus());
-    verify(orders).save(order);
+    verify(orderRepository).save(order);
   }
 
   @Test
   void handlePaymentFailed_shouldReleaseInventoryOnlyOnce() {
     Order order = new Order(7L, 300_000L, "VND");
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
-    when(orders.findById(3L)).thenReturn(Optional.of(order));
-    when(orders.save(order)).thenReturn(order);
+    when(orderRepository.findById(3L)).thenReturn(Optional.of(order));
+    when(orderRepository.save(order)).thenReturn(order);
 
     Order failed = orderService.handlePaymentFailed(3L);
 
     assertEquals(OrderStatus.PAYMENT_FAILED, failed.getStatus());
-    verify(inventory).release(Map.of(10L, 2));
+    verify(inventoryService).release(Map.of(10L, 2));
   }
 
   private Cart cartWithItem(Long skuId, int quantity, long unitPrice) {

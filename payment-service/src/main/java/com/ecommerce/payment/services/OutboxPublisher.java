@@ -12,23 +12,24 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class OutboxPublisher {
-  private final OutboxEventRepository events;
+  private final OutboxEventRepository outboxEventRepository;
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final String paymentEventsTopic;
 
   public OutboxPublisher(
-      OutboxEventRepository events,
+      OutboxEventRepository outboxEventRepository,
       KafkaTemplate<String, String> kafkaTemplate,
       @Value("${app.kafka.topics.payment-events:ecommerce.payment.events}")
           String paymentEventsTopic) {
-    this.events = events;
+    this.outboxEventRepository = outboxEventRepository;
     this.kafkaTemplate = kafkaTemplate;
     this.paymentEventsTopic = paymentEventsTopic;
   }
 
   @Scheduled(fixedDelayString = "${app.outbox.publish-delay-ms:5000}")
   public void publishPendingEvents() {
-    List<OutboxEvent> pending = events.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
+    List<OutboxEvent> pending =
+        outboxEventRepository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
     pending.forEach(this::publish);
   }
 
@@ -41,6 +42,6 @@ public class OutboxPublisher {
     } catch (Exception exception) {
       event.markFailed(exception.getMessage());
     }
-    events.save(event);
+    outboxEventRepository.save(event);
   }
 }

@@ -8,17 +8,18 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PaymentService {
-  private final PaymentRepository payments;
-  private final PaymentEventService events;
+  private final PaymentRepository paymentRepository;
+  private final PaymentEventService paymentEventService;
 
-  public PaymentService(PaymentRepository payments, PaymentEventService events) {
-    this.payments = payments;
-    this.events = events;
+  public PaymentService(
+      PaymentRepository paymentRepository, PaymentEventService paymentEventService) {
+    this.paymentRepository = paymentRepository;
+    this.paymentEventService = paymentEventService;
   }
 
   @Transactional
   public Payment processOrderPayment(OrderCreatedEvent order) {
-    Optional<Payment> existing = payments.findByOrderId(order.orderId());
+    Optional<Payment> existing = paymentRepository.findByOrderId(order.orderId());
     if (existing.isPresent()) {
       return existing.get();
     }
@@ -31,14 +32,14 @@ public class PaymentService {
       payment.complete("SIMULATED-" + order.orderId());
     }
 
-    Payment saved = payments.save(payment);
-    events.enqueuePaymentResult(saved);
+    Payment saved = paymentRepository.save(payment);
+    paymentEventService.enqueuePaymentResult(saved);
     return saved;
   }
 
   @Transactional
   public Payment getByOrderId(Long orderId) {
-    return payments
+    return paymentRepository
         .findByOrderId(orderId)
         .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thanh toán cho đơn hàng"));
   }

@@ -14,25 +14,25 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class OrderService {
-  private final OrderRepository orders;
-  private final CartService carts;
-  private final InventoryService inventory;
-  private final OutboxEventService outbox;
+  private final OrderRepository ordersRepository;
+  private final CartService cartService;
+  private final InventoryService inventoryService;
+  private final OutboxEventService outboxEventService;
 
   public OrderService(
-      OrderRepository orders,
-      CartService carts,
-      InventoryService inventory,
-      OutboxEventService outbox) {
-    this.orders = orders;
-    this.carts = carts;
-    this.inventory = inventory;
-    this.outbox = outbox;
+      OrderRepository ordersRepository,
+      CartService cartService,
+      InventoryService inventoryService,
+      OutboxEventService outboxEventService) {
+    this.ordersRepository = ordersRepository;
+    this.cartService = cartService;
+    this.inventoryService = inventoryService;
+    this.outboxEventService = outboxEventService;
   }
 
   @Transactional
   public Order createFromCart(Long userId) {
-    Cart cart = carts.getOrCreate(userId);
+    Cart cart = cartService.getOrCreate(userId);
     if (cart.getItems().isEmpty()) {
       throw new IllegalArgumentException("CART_EMPTY");
     }
@@ -45,7 +45,7 @@ public class OrderService {
                     item -> item.getQuantity(),
                     Integer::sum,
                     LinkedHashMap::new));
-    inventory.reserve(quantities);
+    inventoryService.reserve(quantities);
 
     long totalAmount =
         cart.getItems().stream()
@@ -58,20 +58,20 @@ public class OrderService {
                 order.addItem(
                     new OrderItem(
                         item.getSkuId(), item.getQuantity(), item.getDisplayedUnitPrice())));
-    carts.clear(userId, cart.getVersion());
-    Order saved = orders.save(order);
-    outbox.enqueueOrderCreated(saved);
+    cartService.clear(userId, cart.getVersion());
+    Order saved = ordersRepository.save(order);
+    outboxEventService.enqueueOrderCreated(saved);
     return saved;
   }
 
   @Transactional
   public List<Order> listByUser(Long userId) {
-    return orders.findByUserIdOrderByCreatedAtDesc(userId);
+    return ordersRepository.findByUserIdOrderByCreatedAtDesc(userId);
   }
 
   @Transactional
   public Order getByUser(Long userId, Long orderId) {
-    return orders
+    return ordersRepository
         .findByIdAndUserId(orderId, userId)
         .orElseThrow(() -> new OrderNotFoundException(orderId));
   }
@@ -87,10 +87,10 @@ public class OrderService {
                     item -> item.getQuantity(),
                     Integer::sum,
                     LinkedHashMap::new));
-    inventory.release(quantities);
+    inventoryService.release(quantities);
     order.cancel();
-    Order saved = orders.save(order);
-    outbox.enqueueOrderCancelled(saved);
+    Order saved = ordersRepository.save(order);
+    outboxEventService.enqueueOrderCancelled(saved);
     return saved;
   }
 
@@ -98,21 +98,23 @@ public class OrderService {
   public Order handlePaymentCompleted(Long orderId) {
     Order order = get(orderId);
     order.markPaid();
-    return orders.save(order);
+    return ordersRepository.save(order);
   }
 
   @Transactional
   public Order handlePaymentFailed(Long orderId) {
     Order order = get(orderId);
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING) {
-      inventory.release(quantities(order));
+      inventoryService.release(quantities(order));
       order.markPaymentFailed();
     }
-    return orders.save(order);
+    return ordersRepository.save(order);
   }
 
   private Order get(Long orderId) {
-    return orders.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+    return ordersRepository
+        .findById(orderId)
+        .orElseThrow(() -> new OrderNotFoundException(orderId));
   }
 
   private Map<Long, Integer> quantities(Order order) {

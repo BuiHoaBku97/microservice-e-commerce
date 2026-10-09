@@ -12,11 +12,12 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class OutboxEventService {
-  private final OutboxEventRepository events;
+  private final OutboxEventRepository outboxEventRepository;
   private final ObjectMapper objectMapper;
 
-  public OutboxEventService(OutboxEventRepository events, ObjectMapper objectMapper) {
-    this.events = events;
+  public OutboxEventService(
+      OutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
+    this.outboxEventRepository = outboxEventRepository;
     this.objectMapper = objectMapper;
   }
 
@@ -33,7 +34,7 @@ public class OutboxEventService {
   private void enqueue(String eventType, Order order) {
     try {
       String payload = objectMapper.writeValueAsString(payload(eventType, order));
-      events.save(new OutboxEvent("Order", order.getId(), eventType, payload));
+      outboxEventRepository.save(new OutboxEvent("Order", order.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Không thể tạo sự kiện đơn hàng", exception);
     }
