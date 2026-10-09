@@ -17,11 +17,17 @@ public class OrderService {
   private final OrderRepository orders;
   private final CartService carts;
   private final InventoryService inventory;
+  private final OutboxEventService outbox;
 
-  public OrderService(OrderRepository orders, CartService carts, InventoryService inventory) {
+  public OrderService(
+      OrderRepository orders,
+      CartService carts,
+      InventoryService inventory,
+      OutboxEventService outbox) {
     this.orders = orders;
     this.carts = carts;
     this.inventory = inventory;
+    this.outbox = outbox;
   }
 
   @Transactional
@@ -53,7 +59,9 @@ public class OrderService {
                     new OrderItem(
                         item.getSkuId(), item.getQuantity(), item.getDisplayedUnitPrice())));
     carts.clear(userId, cart.getVersion());
-    return orders.save(order);
+    Order saved = orders.save(order);
+    outbox.enqueueOrderCreated(saved);
+    return saved;
   }
 
   @Transactional
@@ -81,6 +89,8 @@ public class OrderService {
                     LinkedHashMap::new));
     inventory.release(quantities);
     order.cancel();
-    return orders.save(order);
+    Order saved = orders.save(order);
+    outbox.enqueueOrderCancelled(saved);
+    return saved;
   }
 }

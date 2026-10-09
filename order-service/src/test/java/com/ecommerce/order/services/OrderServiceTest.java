@@ -23,12 +23,13 @@ class OrderServiceTest {
   @Mock private OrderRepository orders;
   @Mock private CartService carts;
   @Mock private InventoryService inventory;
+  @Mock private OutboxEventService outbox;
 
   private OrderService orderService;
 
   @BeforeEach
   void setUp() {
-    orderService = new OrderService(orders, carts, inventory);
+    orderService = new OrderService(orders, carts, inventory, outbox);
   }
 
   @Test
@@ -42,6 +43,7 @@ class OrderServiceTest {
     assertEquals(300_000L, order.getTotalAmount());
     assertEquals(1, order.getItems().size());
     verify(inventory).reserve(Map.of(10L, 2));
+    verify(outbox).enqueueOrderCreated(any(Order.class));
     verify(carts).clear(eq(7L), eq(cart.getVersion()));
   }
 
@@ -56,6 +58,7 @@ class OrderServiceTest {
 
     assertEquals("CANCELLED", cancelled.getStatus().name());
     verify(inventory).release(Map.of(10L, 2));
+    verify(outbox).enqueueOrderCancelled(order);
     verify(orders).save(order);
   }
 
