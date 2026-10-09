@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
+import com.ecommerce.order.models.entities.OrderStatus;
 import com.ecommerce.order.repositories.OrderRepository;
 import java.util.Map;
 import java.util.Optional;
@@ -60,6 +61,31 @@ class OrderServiceTest {
     verify(inventory).release(Map.of(10L, 2));
     verify(outbox).enqueueOrderCancelled(order);
     verify(orders).save(order);
+  }
+
+  @Test
+  void handlePaymentCompleted_shouldMarkOrderAsPaid() {
+    Order order = new Order(7L, 300_000L, "VND");
+    when(orders.findById(3L)).thenReturn(Optional.of(order));
+    when(orders.save(order)).thenReturn(order);
+
+    Order paid = orderService.handlePaymentCompleted(3L);
+
+    assertEquals(OrderStatus.PAID, paid.getStatus());
+    verify(orders).save(order);
+  }
+
+  @Test
+  void handlePaymentFailed_shouldReleaseInventoryOnlyOnce() {
+    Order order = new Order(7L, 300_000L, "VND");
+    order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
+    when(orders.findById(3L)).thenReturn(Optional.of(order));
+    when(orders.save(order)).thenReturn(order);
+
+    Order failed = orderService.handlePaymentFailed(3L);
+
+    assertEquals(OrderStatus.PAYMENT_FAILED, failed.getStatus());
+    verify(inventory).release(Map.of(10L, 2));
   }
 
   private Cart cartWithItem(Long skuId, int quantity, long unitPrice) {

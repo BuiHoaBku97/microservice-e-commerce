@@ -93,4 +93,35 @@ public class OrderService {
     outbox.enqueueOrderCancelled(saved);
     return saved;
   }
+
+  @Transactional
+  public Order handlePaymentCompleted(Long orderId) {
+    Order order = get(orderId);
+    order.markPaid();
+    return orders.save(order);
+  }
+
+  @Transactional
+  public Order handlePaymentFailed(Long orderId) {
+    Order order = get(orderId);
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING) {
+      inventory.release(quantities(order));
+      order.markPaymentFailed();
+    }
+    return orders.save(order);
+  }
+
+  private Order get(Long orderId) {
+    return orders.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+  }
+
+  private Map<Long, Integer> quantities(Order order) {
+    return order.getItems().stream()
+        .collect(
+            Collectors.toMap(
+                OrderItem::getSkuId,
+                OrderItem::getQuantity,
+                Integer::sum,
+                LinkedHashMap::new));
+  }
 }

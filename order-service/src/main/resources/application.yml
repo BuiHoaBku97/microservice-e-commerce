@@ -21,6 +21,10 @@ spring:
 
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${ORDER_KAFKA_GROUP_ID:order-service}
+      auto-offset-reset: earliest
+      enable-auto-commit: true
 
 server:
   port: 8083
@@ -29,6 +33,7 @@ app:
   kafka:
     topics:
       order-events: ${ORDER_EVENTS_TOPIC:ecommerce.order.events}
+      payment-events: ${PAYMENT_EVENTS_TOPIC:ecommerce.payment.events}
   outbox:
     publish-delay-ms: ${OUTBOX_PUBLISH_DELAY_MS:5000}
 

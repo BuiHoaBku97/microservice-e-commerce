@@ -78,6 +78,18 @@ public class Order {
     status = OrderStatus.CANCELLED;
   }
 
+  public void markPaid() {
+    if (status == OrderStatus.PENDING) {
+      status = OrderStatus.PAID;
+    }
+  }
+
+  public void markPaymentFailed() {
+    if (status == OrderStatus.PENDING) {
+      status = OrderStatus.PAYMENT_FAILED;
+    }
+  }
+
   @PrePersist
   void onCreate() {
     Instant now = Instant.now();
