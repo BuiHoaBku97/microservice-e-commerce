@@ -1,4 +1,4 @@
-package com.ecommerce.payment.services;
+package com.ecommerce.payment.messaging.events;
 
 import com.fasterxml.jackson.databind.JsonNode;
 

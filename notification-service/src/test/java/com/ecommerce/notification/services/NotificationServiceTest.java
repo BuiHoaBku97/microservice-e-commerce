@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.ecommerce.notification.models.entities.Notification;
 import com.ecommerce.notification.models.entities.NotificationStatus;
+import com.ecommerce.notification.messaging.events.NotificationEvent;
 import com.ecommerce.notification.repositories.NotificationRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,4 @@
-package com.ecommerce.notification.services;
+package com.ecommerce.notification.messaging.events;
 
 import com.fasterxml.jackson.databind.JsonNode;
 

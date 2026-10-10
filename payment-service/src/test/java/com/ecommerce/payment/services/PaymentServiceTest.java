@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.ecommerce.payment.models.entities.Payment;
 import com.ecommerce.payment.models.entities.PaymentStatus;
+import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
 import com.ecommerce.payment.repositories.PaymentRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

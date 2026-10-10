@@ -1,4 +1,4 @@
-package com.ecommerce.order.services;
+package com.ecommerce.order.messaging.events;
 
 import com.fasterxml.jackson.databind.JsonNode;
 

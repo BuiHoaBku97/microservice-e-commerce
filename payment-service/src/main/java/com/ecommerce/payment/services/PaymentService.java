@@ -1,5 +1,6 @@
 package com.ecommerce.payment.services;
 
+import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
 import com.ecommerce.payment.models.entities.Payment;
 import com.ecommerce.payment.repositories.PaymentRepository;
 import jakarta.transaction.Transactional;

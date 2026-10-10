@@ -1,8 +1,8 @@
-package com.ecommerce.payment.services;
+package com.ecommerce.order.messaging.publishers;
 
-import com.ecommerce.payment.models.entities.OutboxEvent;
-import com.ecommerce.payment.models.entities.OutboxStatus;
-import com.ecommerce.payment.repositories.OutboxEventRepository;
+import com.ecommerce.order.models.entities.OutboxEvent;
+import com.ecommerce.order.models.entities.OutboxStatus;
+import com.ecommerce.order.repositories.OutboxEventRepository;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,16 +14,15 @@ import org.springframework.stereotype.Component;
 public class OutboxPublisher {
   private final OutboxEventRepository outboxEventRepository;
   private final KafkaTemplate<String, String> kafkaTemplate;
-  private final String paymentEventsTopic;
+  private final String orderEventsTopic;
 
   public OutboxPublisher(
       OutboxEventRepository outboxEventRepository,
       KafkaTemplate<String, String> kafkaTemplate,
-      @Value("${app.kafka.topics.payment-events:ecommerce.payment.events}")
-          String paymentEventsTopic) {
+      @Value("${app.kafka.topics.order-events:ecommerce.order.events}") String orderEventsTopic) {
     this.outboxEventRepository = outboxEventRepository;
     this.kafkaTemplate = kafkaTemplate;
-    this.paymentEventsTopic = paymentEventsTopic;
+    this.orderEventsTopic = orderEventsTopic;
   }
 
   @Scheduled(fixedDelayString = "${app.outbox.publish-delay-ms:5000}")
@@ -36,7 +35,7 @@ public class OutboxPublisher {
   private void publish(OutboxEvent event) {
     try {
       kafkaTemplate
-          .send(paymentEventsTopic, String.valueOf(event.getAggregateId()), event.getPayload())
+          .send(orderEventsTopic, String.valueOf(event.getAggregateId()), event.getPayload())
           .get(10, TimeUnit.SECONDS);
       event.markPublished();
     } catch (Exception exception) {

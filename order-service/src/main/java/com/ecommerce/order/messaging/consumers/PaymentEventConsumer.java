@@ -1,5 +1,7 @@
-package com.ecommerce.order.services;
+package com.ecommerce.order.messaging.consumers;
 
+import com.ecommerce.order.messaging.events.PaymentEvent;
+import com.ecommerce.order.services.OrderService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.annotation.KafkaListener;

@@ -2,6 +2,7 @@ package com.ecommerce.notification.services;
 
 import com.ecommerce.notification.models.entities.Notification;
 import com.ecommerce.notification.repositories.NotificationRepository;
+import com.ecommerce.notification.messaging.events.NotificationEvent;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import org.springframework.stereotype.Service;
