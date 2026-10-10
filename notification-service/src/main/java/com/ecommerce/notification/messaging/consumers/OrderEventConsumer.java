@@ -4,6 +4,7 @@ import com.ecommerce.notification.messaging.events.NotificationEvent;
 import com.ecommerce.notification.services.NotificationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -20,10 +21,11 @@ public class OrderEventConsumer {
   @KafkaListener(
       topics = "${app.kafka.topics.order-events:ecommerce.order.events}",
       groupId = "${spring.kafka.consumer.group-id:notification-service}")
-  public void consume(String message) {
+  public void consume(String message, Acknowledgment acknowledgment) {
     try {
       JsonNode payload = objectMapper.readTree(message);
       notificationService.createFromEvent(NotificationEvent.from(payload));
+      acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Không thể xử lý sự kiện đơn hàng", exception);
     }

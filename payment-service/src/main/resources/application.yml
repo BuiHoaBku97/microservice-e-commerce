@@ -19,7 +19,9 @@ spring:
     consumer:
       group-id: ${PAYMENT_KAFKA_GROUP_ID:payment-service}
       auto-offset-reset: earliest
-      enable-auto-commit: true
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
