@@ -9,11 +9,13 @@
         </processorPath>
         <module name="e-commerce.catalog-service.main" />
         <module name="e-commerce.order-service.main" />
+        <module name="e-commerce.notification-service.main" />
         <module name="e-commerce.identity-service.test" />
         <module name="e-commerce.order-service.test" />
         <module name="e-commerce.payment-service.main" />
         <module name="e-commerce.payment-service.test" />
         <module name="e-commerce.catalog-service.test" />
+        <module name="e-commerce.notification-service.test" />
         <module name="e-commerce.identity-service.main" />
       </profile>
     </annotationProcessing>
