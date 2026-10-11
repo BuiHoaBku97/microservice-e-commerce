@@ -13,13 +13,13 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -50,6 +50,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .getPayload();
         if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
           throw new IllegalArgumentException("JWT đã hết hạn");
+        }
+        if (claims.getSubject() == null || Long.parseLong(claims.getSubject()) <= 0) {
+          throw new IllegalArgumentException("Danh tính khách hàng không hợp lệ");
         }
         String scope = claims.get("scope", String.class);
         var authorities =

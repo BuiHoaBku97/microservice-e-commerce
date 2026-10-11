@@ -31,7 +31,7 @@ class OrderServiceTest {
   @BeforeEach
   void setUp() {
     orderService =
-        new OrderService(orderRepository, cartService, inventoryService, outboxEventService);
+        new OrderService(orderRepository, cartService, inventoryService, outboxEventService, 900);
   }
 
   @Test
@@ -45,6 +45,9 @@ class OrderServiceTest {
 
     assertEquals(300_000L, order.getTotalAmount());
     assertEquals(1, order.getItems().size());
+    org.assertj.core.api.Assertions.assertThat(order.getPaymentDueAt())
+        .isBetween(
+            java.time.Instant.now().plusSeconds(895), java.time.Instant.now().plusSeconds(900));
     verify(inventoryService).reserve(Map.of(10L, 2));
     verify(outboxEventService).enqueueOrderCreated(any(Order.class));
     verify(cartService).clear(eq(7L), eq(cart.getVersion()));

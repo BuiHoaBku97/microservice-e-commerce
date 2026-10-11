@@ -6,10 +6,12 @@ import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderItem;
 import com.ecommerce.order.repositories.OrderRepository;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -18,16 +20,22 @@ public class OrderService {
   private final CartService cartService;
   private final InventoryService inventoryService;
   private final OutboxEventService outboxEventService;
+  private final long paymentTimeoutSeconds;
 
   public OrderService(
       OrderRepository ordersRepository,
       CartService cartService,
       InventoryService inventoryService,
-      OutboxEventService outboxEventService) {
+      OutboxEventService outboxEventService,
+      @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
     this.ordersRepository = ordersRepository;
     this.cartService = cartService;
     this.inventoryService = inventoryService;
     this.outboxEventService = outboxEventService;
+    if (paymentTimeoutSeconds <= 0) {
+      throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
+    }
+    this.paymentTimeoutSeconds = paymentTimeoutSeconds;
   }
 
   @Transactional
@@ -51,7 +59,8 @@ public class OrderService {
         cart.getItems().stream()
             .mapToLong(item -> item.getDisplayedUnitPrice() * item.getQuantity())
             .sum();
-    Order order = new Order(userId, totalAmount, "VND");
+    Order order =
+        new Order(userId, totalAmount, "VND", Instant.now().plusSeconds(paymentTimeoutSeconds));
     cart.getItems()
         .forEach(
             item ->
@@ -121,9 +130,6 @@ public class OrderService {
     return order.getItems().stream()
         .collect(
             Collectors.toMap(
-                OrderItem::getSkuId,
-                OrderItem::getQuantity,
-                Integer::sum,
-                LinkedHashMap::new));
+                OrderItem::getSkuId, OrderItem::getQuantity, Integer::sum, LinkedHashMap::new));
   }
 }

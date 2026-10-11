@@ -18,6 +18,12 @@ spring:
           uri: lb://catalog-service
           predicates:
             - Path=/api/v1/categories/**,/api/v1/products/**,/api/v1/admin/categories/**,/api/v1/admin/products/**,/api/v1/admin/skus/**
+        - id: payment-by-order
+          uri: lb://payment-service
+          order: -10
+          predicates:
+            - Path=/api/v1/orders/{orderId}/payment
+            - Method=GET
         - id: order-service
           uri: lb://order-service
           predicates:

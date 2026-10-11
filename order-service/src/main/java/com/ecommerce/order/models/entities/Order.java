@@ -43,6 +43,9 @@ public class Order {
   @Column(nullable = false, length = 3)
   private String currency = "VND";
 
+  @Column(nullable = false, updatable = false)
+  private Instant paymentDueAt;
+
   @Version
   @Column(nullable = false)
   private Long version = 0L;
@@ -61,9 +64,14 @@ public class Order {
   private List<OrderItem> items = new ArrayList<>();
 
   public Order(Long userId, Long totalAmount, String currency) {
+    this(userId, totalAmount, currency, Instant.now().plusSeconds(900));
+  }
+
+  public Order(Long userId, Long totalAmount, String currency, Instant paymentDueAt) {
     this.userId = userId;
     this.totalAmount = totalAmount;
     this.currency = currency;
+    this.paymentDueAt = paymentDueAt;
   }
 
   public void addItem(OrderItem item) {

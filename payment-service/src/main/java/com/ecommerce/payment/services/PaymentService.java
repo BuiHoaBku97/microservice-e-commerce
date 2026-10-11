@@ -37,11 +37,4 @@ public class PaymentService {
     paymentEventService.enqueuePaymentResult(saved);
     return saved;
   }
-
-  @Transactional
-  public Payment getByOrderId(Long orderId) {
-    return paymentRepository
-        .findByOrderId(orderId)
-        .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thanh toán cho đơn hàng"));
-  }
 }
