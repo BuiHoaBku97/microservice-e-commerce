@@ -84,6 +84,32 @@ class JwtAuthenticationGlobalFilterTest {
     return MockServerWebExchange.from(MockServerHttpRequest.method(method, path).build());
   }
 
+  @Test
+  void allowsInventoryAvailabilityWithoutToken() {
+    var exchange = exchange(HttpMethod.GET, "/api/v1/inventory/availability?skuIds=1,2");
+    AtomicBoolean chainCalled = new AtomicBoolean();
+    filter.filter(exchange, next(chainCalled)).block();
+    assertTrue(chainCalled.get());
+  }
+
+  @Test
+  void rejectsAnonymousInventoryWrite() {
+    var exchange = exchange(HttpMethod.POST, "/api/v1/admin/inventory/1/receipts");
+    AtomicBoolean chainCalled = new AtomicBoolean();
+    filter.filter(exchange, next(chainCalled)).block();
+    assertEquals(401, exchange.getResponse().getStatusCode().value());
+    assertFalse(chainCalled.get());
+  }
+
+  @Test
+  void rejectsCustomerInventoryWrite() {
+    var exchange = exchange(HttpMethod.POST, "/api/v1/admin/inventory/1/receipts", token("CUSTOMER"));
+    AtomicBoolean chainCalled = new AtomicBoolean();
+    filter.filter(exchange, next(chainCalled)).block();
+    assertEquals(403, exchange.getResponse().getStatusCode().value());
+    assertFalse(chainCalled.get());
+  }
+
   private MockServerWebExchange exchange(HttpMethod method, String path, String token) {
     return MockServerWebExchange.from(
         MockServerHttpRequest.method(method, path)

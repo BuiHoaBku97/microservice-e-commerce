@@ -19,7 +19,7 @@ public class InventoryService {
     this.inventoryRepository = inventoryRepository;
   }
 
-  public List<CartDtos.InventoryResponse> availability(List<Long> skuIds) {
+  public List<CartDtos.InventoryAvailabilityResponse> availability(List<Long> skuIds) {
     Map<Long, Inventory> byId =
         inventoryRepository.findBySkuIdIn(skuIds).stream()
             .collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
@@ -110,13 +110,8 @@ public class InventoryService {
         });
   }
 
-  private CartDtos.InventoryResponse response(Long id, Inventory inventory) {
-    if (inventory == null) return new CartDtos.InventoryResponse(id, 0, 0, 0, 0L);
-    return new CartDtos.InventoryResponse(
-        id,
-        inventory.getOnHand(),
-        inventory.getReserved(),
-        inventory.getOnHand() - inventory.getReserved(),
-        inventory.getVersion());
+  private CartDtos.InventoryAvailabilityResponse response(Long id, Inventory inventory) {
+    int available = inventory == null ? 0 : inventory.getOnHand() - inventory.getReserved();
+    return new CartDtos.InventoryAvailabilityResponse(id, available);
   }
 }

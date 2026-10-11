@@ -22,6 +22,8 @@ public final class CartDtos {
   public record InventoryResponse(
       Long skuId, Integer onHand, Integer reserved, Integer available, Long version) {}
 
+  public record InventoryAvailabilityResponse(Long skuId, Integer available) {}
+
   public record InventoryMutationRequest(@NotNull Integer quantity, String reason, Long version) {}
 
   public record OrderResponse(

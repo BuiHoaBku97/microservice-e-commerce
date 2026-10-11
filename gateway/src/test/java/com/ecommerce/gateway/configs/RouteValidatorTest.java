@@ -63,6 +63,14 @@ class RouteValidatorTest {
     return MockServerWebExchange.from(MockServerHttpRequest.method(method, path).build());
   }
 
+  @Test
+  void opensOnlyGetOnExactInventoryAvailabilityPath() {
+    assertTrue(routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/inventory/availability")));
+    assertFalse(routeValidator.isOpenApi(exchange(HttpMethod.POST, "/api/v1/inventory/availability")));
+    assertFalse(routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/inventory/availability/1")));
+    assertFalse(routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/admin/inventory")));
+  }
+
   private Claims claimsWithScope(String scope) {
     return Jwts.claims()
         .subject("1")

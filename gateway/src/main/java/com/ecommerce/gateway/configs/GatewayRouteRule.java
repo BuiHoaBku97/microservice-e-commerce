@@ -13,6 +13,7 @@ public final class GatewayRouteRule {
           new Route(HttpMethod.POST, "/api/v1/auth/login"),
           new Route(HttpMethod.POST, "/api/v1/auth/refresh"),
           new Route(HttpMethod.GET, "/api/v1/categories/**"),
+          new Route(HttpMethod.GET, "/api/v1/inventory/availability"),
           new Route(HttpMethod.GET, "/api/v1/products/**"));
 
   private GatewayRouteRule() {}
