@@ -24,10 +24,15 @@ public class OrderEventConsumer {
   public void consume(String message, Acknowledgment acknowledgment) {
     try {
       JsonNode payload = objectMapper.readTree(message);
-      if ("OrderCreated".equals(payload.path("eventType").asText())) {
-        paymentService.processOrderPayment(OrderCreatedEvent.from(payload));
-        acknowledgment.acknowledge();
+      switch (payload.path("eventType").asText()) {
+        case "OrderCreated" ->
+            paymentService.processOrderPayment(OrderCreatedEvent.from(payload));
+        case "OrderShipping", "OrderCompleted" -> {
+          // Các mốc giao hàng không thay đổi giao dịch thanh toán.
+        }
+        default -> throw new IllegalArgumentException("Loại sự kiện đơn hàng chưa được hỗ trợ");
       }
+      acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Không thể xử lý sự kiện đơn hàng", exception);
     }

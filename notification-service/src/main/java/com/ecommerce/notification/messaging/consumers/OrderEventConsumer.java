@@ -24,6 +24,11 @@ public class OrderEventConsumer {
   public void consume(String message, Acknowledgment acknowledgment) {
     try {
       JsonNode payload = objectMapper.readTree(message);
+      if ("OrderConfirmationRejected".equals(payload.path("eventType").asText())) {
+        // Kết quả đối soát dành cho Payment, không tạo thông báo khách hàng.
+        acknowledgment.acknowledge();
+        return;
+      }
       notificationService.createFromEvent(NotificationEvent.from(payload));
       acknowledgment.acknowledge();
     } catch (Exception exception) {

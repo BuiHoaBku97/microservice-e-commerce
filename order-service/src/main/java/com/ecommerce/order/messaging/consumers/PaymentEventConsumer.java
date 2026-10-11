@@ -27,11 +27,12 @@ public class PaymentEventConsumer {
       PaymentEvent event = PaymentEvent.from(payload);
       if ("PaymentCompleted".equals(event.eventType())) {
         orderService.handlePaymentCompleted(event.orderId());
-        acknowledgment.acknowledge();
       } else if ("PaymentFailed".equals(event.eventType())) {
         orderService.handlePaymentFailed(event.orderId());
-        acknowledgment.acknowledge();
+      } else {
+        throw new IllegalArgumentException("Loại sự kiện thanh toán chưa được hỗ trợ");
       }
+      acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Không thể xử lý sự kiện thanh toán", exception);
     }
