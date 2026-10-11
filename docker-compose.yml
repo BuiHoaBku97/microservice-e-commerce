@@ -44,6 +44,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
+        set -e;
         until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1;
         do sleep 2; done;
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
@@ -51,9 +52,13 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
         --topic ecommerce.payment.events --partitions 3 --replication-factor 1
         ; /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
-        --topic ecommerce.order.events.DLT --partitions 3 --replication-factor 1
+        --topic ecommerce.order.events.payment-service.dlt --partitions 3 --replication-factor 1
         ; /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
-        --topic ecommerce.payment.events.DLT --partitions 3 --replication-factor 1
+        --topic ecommerce.order.events.notification-service.dlt --partitions 3 --replication-factor 1
+        ; /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic ecommerce.payment.events.order-service.dlt --partitions 3 --replication-factor 1
+        ; /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic ecommerce.payment.events.notification-service.dlt --partitions 3 --replication-factor 1
 
   redis:
     image: redis:7.4.1
@@ -174,8 +179,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
-        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
   gateway:
     build:
       context: ./gateway

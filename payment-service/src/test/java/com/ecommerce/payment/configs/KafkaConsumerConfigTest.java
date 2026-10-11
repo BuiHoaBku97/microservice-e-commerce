@@ -29,7 +29,7 @@ class KafkaConsumerConfigTest {
               var factory = context.getBean(ConcurrentKafkaListenerContainerFactory.class);
               var container = factory.createContainer("configuration-test");
               assertThat(container.getContainerProperties().getAckMode())
-                  .isEqualTo(ContainerProperties.AckMode.MANUAL);
+                  .isEqualTo(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
               var consumerProperties =
                   context.getBean(ConsumerFactory.class).getConfigurationProperties();
               assertThat(consumerProperties.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
@@ -47,4 +47,3 @@ class KafkaConsumerConfigTest {
             });
   }
 }
-
