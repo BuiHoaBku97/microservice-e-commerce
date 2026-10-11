@@ -99,6 +99,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8081
+      EUREKA_URI: http://eureka-server:8761/eureka/
       IDENTITY_DB_URL: jdbc:postgresql://postgres:5432/identity_db
       IDENTITY_DB_USERNAME: identity_user
       IDENTITY_DB_PASSWORD: identity_password
@@ -111,6 +112,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8082
+      EUREKA_URI: http://eureka-server:8761/eureka/
       CATALOG_DB_URL: jdbc:postgresql://postgres:5432/catalog_db
       CATALOG_DB_USERNAME: catalog_user
       CATALOG_DB_PASSWORD: catalog_password
@@ -129,6 +131,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8083
+      EUREKA_URI: http://eureka-server:8761/eureka/
       ORDER_DB_URL: jdbc:postgresql://postgres:5432/order_db
       ORDER_DB_USERNAME: order_user
       ORDER_DB_PASSWORD: order_password
@@ -147,6 +150,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8084
+      EUREKA_URI: http://eureka-server:8761/eureka/
       PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/payment_db
       PAYMENT_DB_USERNAME: payment_user
       PAYMENT_DB_PASSWORD: payment_password
@@ -162,6 +166,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8085
+      EUREKA_URI: http://eureka-server:8761/eureka/
       NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/notification_db
       NOTIFICATION_DB_USERNAME: notification_user
       NOTIFICATION_DB_PASSWORD: notification_password
@@ -177,6 +182,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8080
+      EUREKA_URI: http://eureka-server:8761/eureka/
     depends_on:
       - eureka-server
       - identity-service
