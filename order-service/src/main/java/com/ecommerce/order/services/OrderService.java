@@ -3,7 +3,11 @@ package com.ecommerce.order.services;
 import com.ecommerce.order.clients.CatalogCheckoutItem;
 import com.ecommerce.order.clients.CatalogCheckoutRequest;
 import com.ecommerce.order.clients.CatalogClient;
+import com.ecommerce.order.clients.IdentityCheckoutContext;
+import com.ecommerce.order.clients.IdentityCheckoutContextRequest;
+import com.ecommerce.order.clients.IdentityClient;
 import com.ecommerce.order.exceptions.CatalogUnavailableException;
+import com.ecommerce.order.exceptions.IdentityUnavailableException;
 import com.ecommerce.order.exceptions.IdempotencyKeyConflictException;
 import com.ecommerce.order.exceptions.OrderNotFoundException;
 import com.ecommerce.order.exceptions.PriceChangedException;
@@ -37,6 +41,7 @@ public class OrderService {
   private final InventoryService inventoryService;
   private final OutboxEventService outboxEventService;
   private final CatalogClient catalogClient;
+  private final IdentityClient identityClient;
   private final long paymentTimeoutSeconds;
 
   public OrderService(
@@ -45,12 +50,14 @@ public class OrderService {
       InventoryService inventoryService,
       OutboxEventService outboxEventService,
       CatalogClient catalogClient,
+      IdentityClient identityClient,
       @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
     this.ordersRepository = ordersRepository;
     this.cartService = cartService;
     this.inventoryService = inventoryService;
     this.outboxEventService = outboxEventService;
     this.catalogClient = catalogClient;
+    this.identityClient = identityClient;
     if (paymentTimeoutSeconds <= 0) {
       throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
     }
@@ -60,7 +67,7 @@ public class OrderService {
   @Transactional
   public Order createFromCart(Long userId) {
     Cart cart = cartService.getOrCreate(userId);
-    return createFromCart(cart, userId, null, null, null, null, null);
+    return createFromCart(cart, userId, null, null, null, null, null, null);
   }
 
   @Transactional
@@ -73,6 +80,7 @@ public class OrderService {
         checkoutRequest == null ? null : checkoutRequest.cartVersion(),
         checkoutRequest == null ? null : checkoutRequest.expectedItems(),
         authorization,
+        null,
         null,
         null);
   }
@@ -91,6 +99,21 @@ public class OrderService {
       return replayOrReject(existing, requestHash);
     }
 
+    IdentityCheckoutContext checkoutContext;
+    try {
+      checkoutContext =
+          identityClient.getCheckoutContext(
+              new IdentityCheckoutContextRequest(checkoutRequest.addressId()), authorization);
+    } catch (feign.FeignException exception) {
+      if (exception.status() == 403) {
+        throw new IllegalStateException("ACCOUNT_NOT_ACTIVE");
+      }
+      if (exception.status() == 404) {
+        throw new IllegalArgumentException("ADDRESS_NOT_FOUND");
+      }
+      throw new IdentityUnavailableException();
+    }
+
     Cart cart = cartService.getForCheckout(userId);
     existing = ordersRepository.findByUserIdAndIdempotencyKey(userId, normalizedKey).orElse(null);
     if (existing != null) {
@@ -105,7 +128,8 @@ public class OrderService {
             checkoutRequest.expectedItems(),
             authorization,
             normalizedKey,
-            requestHash),
+            requestHash,
+            checkoutContext),
         false);
   }
 
@@ -116,7 +140,8 @@ public class OrderService {
       List<CartDtos.CheckoutItem> expectedItems,
       String authorization,
       String idempotencyKey,
-      String idempotencyHash) {
+      String idempotencyHash,
+      IdentityCheckoutContext checkoutContext) {
     if (cart.getItems().isEmpty()) {
       throw new IllegalArgumentException("CART_EMPTY");
     }
@@ -201,6 +226,17 @@ public class OrderService {
     if (idempotencyKey != null) {
       order.setIdempotency(idempotencyKey, idempotencyHash);
     }
+    if (checkoutContext != null) {
+      IdentityCheckoutContext.AddressSnapshot address = checkoutContext.address();
+      order.setShippingAddress(
+          address.id(),
+          address.recipientName(),
+          address.recipientPhone(),
+          address.addressLine(),
+          address.ward(),
+          address.district(),
+          address.province());
+    }
     cart.getItems()
         .forEach(
             item ->
@@ -236,6 +272,8 @@ public class OrderService {
   private String checkoutHash(CartDtos.CheckoutRequest request) {
     String canonical =
         request.cartVersion()
+            + "|"
+            + request.addressId()
             + "|"
             + request.expectedItems().stream()
                 .sorted(Comparator.comparing(CartDtos.CheckoutItem::skuId))

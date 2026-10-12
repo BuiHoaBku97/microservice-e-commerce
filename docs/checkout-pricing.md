@@ -38,9 +38,10 @@ Giá từ Catalog được dùng để tạo `OrderItem.unitPrice`, tính `lineT
 Các lỗi trên xảy ra trước reserve nên không giữ hàng và không tạo Order.
 OpenFeign tắt retry tự động, timeout mặc định 2 giây kết nối và 3 giây đọc.
 
-Identity checkout-context và địa chỉ giao hàng chưa được triển khai vì Identity
-service hiện chưa có bảng `addresses`. Đây là phần phụ thuộc còn mở của B2;
-không coi `addressId` do client gửi là địa chỉ đã xác minh.
+Identity checkout-context sử dụng `POST /internal/v1/users/current/checkout-context`.
+Order truyền `addressId` và bearer token của user; Identity kiểm tra user ACTIVE,
+quyền sở hữu địa chỉ rồi trả snapshot. Order lưu snapshot vào Order trước khi
+phát `OrderCreated`, nên thay đổi địa chỉ sau checkout không thay đổi đơn cũ.
 
 ## Idempotency checkout
 

@@ -171,6 +171,16 @@ public class OrderController {
         order.getVersion(),
         order.getCreatedAt(),
         order.getPaymentDueAt(),
+        order.getShippingAddressId() == null
+            ? null
+            : new CartDtos.ShippingAddressResponse(
+                order.getShippingAddressId(),
+                order.getShippingRecipientName(),
+                order.getShippingRecipientPhone(),
+                order.getShippingAddressLine(),
+                order.getShippingWard(),
+                order.getShippingDistrict(),
+                order.getShippingProvince()),
         order.getItems().stream().map(this::orderItemResponse).toList());
   }
 

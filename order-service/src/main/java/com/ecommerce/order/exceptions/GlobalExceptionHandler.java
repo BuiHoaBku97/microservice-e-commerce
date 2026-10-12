@@ -53,4 +53,10 @@ public class GlobalExceptionHandler {
   public Map<String, Object> catalogUnavailable(CatalogUnavailableException exception) {
     return Map.of("code", "CATALOG_UNAVAILABLE", "message", exception.getMessage());
   }
+
+  @ExceptionHandler(IdentityUnavailableException.class)
+  @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+  public Map<String, Object> identityUnavailable(IdentityUnavailableException exception) {
+    return Map.of("code", "IDENTITY_UNAVAILABLE", "message", exception.getMessage());
+  }
 }

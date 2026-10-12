@@ -32,12 +32,31 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(IllegalStateException.class)
   ResponseEntity<ApiResponse<Void>> conflict(
       IllegalStateException exception, HttpServletRequest request) {
+    String code = exception.getMessage();
+    if ("ACCOUNT_NOT_ACTIVE".equals(code)) {
+      return ResponseEntity.status(HttpStatus.FORBIDDEN)
+          .body(
+              new ApiResponse<>(
+                  code, "Tài khoản không ở trạng thái hoạt động", null, request.getRequestId()));
+    }
     String message =
-        "EMAIL_EXISTS".equals(exception.getMessage())
-            ? "Email đã được sử dụng"
-            : "Trạng thái yêu cầu không hợp lệ";
+        "EMAIL_EXISTS".equals(code) ? "Email đã được sử dụng" : "Trạng thái yêu cầu không hợp lệ";
     return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(new ApiResponse<>("EMAIL_EXISTS", message, null, request.getRequestId()));
+        .body(new ApiResponse<>(code, message, null, request.getRequestId()));
+  }
+
+  @ExceptionHandler(IllegalArgumentException.class)
+  ResponseEntity<ApiResponse<Void>> badRequest(
+      IllegalArgumentException exception, HttpServletRequest request) {
+    String code = exception.getMessage();
+    String message =
+        "ADDRESS_NOT_FOUND".equals(code)
+            ? "Không tìm thấy địa chỉ của tài khoản"
+            : "USER_NOT_FOUND".equals(code)
+                ? "Không tìm thấy tài khoản"
+                : "Dữ liệu yêu cầu không hợp lệ";
+    return ResponseEntity.badRequest()
+        .body(new ApiResponse<>(code, message, null, request.getRequestId()));
   }
 
   @ExceptionHandler(BadCredentialsException.class)

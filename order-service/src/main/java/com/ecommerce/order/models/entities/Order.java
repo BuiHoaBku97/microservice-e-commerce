@@ -62,6 +62,27 @@ public class Order {
   @Column(name = "idempotency_hash", length = 64)
   private String idempotencyHash;
 
+  @Column(name = "shipping_address_id")
+  private Long shippingAddressId;
+
+  @Column(name = "shipping_recipient_name", length = 150)
+  private String shippingRecipientName;
+
+  @Column(name = "shipping_recipient_phone", length = 30)
+  private String shippingRecipientPhone;
+
+  @Column(name = "shipping_address_line", length = 255)
+  private String shippingAddressLine;
+
+  @Column(name = "shipping_ward", length = 100)
+  private String shippingWard;
+
+  @Column(name = "shipping_district", length = 100)
+  private String shippingDistrict;
+
+  @Column(name = "shipping_province", length = 100)
+  private String shippingProvince;
+
   @OneToMany(
       mappedBy = "order",
       cascade = CascadeType.ALL,
@@ -88,6 +109,23 @@ public class Order {
   public void setIdempotency(String idempotencyKey, String idempotencyHash) {
     this.idempotencyKey = idempotencyKey;
     this.idempotencyHash = idempotencyHash;
+  }
+
+  public void setShippingAddress(
+      Long addressId,
+      String recipientName,
+      String recipientPhone,
+      String addressLine,
+      String ward,
+      String district,
+      String province) {
+    this.shippingAddressId = addressId;
+    this.shippingRecipientName = recipientName;
+    this.shippingRecipientPhone = recipientPhone;
+    this.shippingAddressLine = addressLine;
+    this.shippingWard = ward;
+    this.shippingDistrict = district;
+    this.shippingProvince = province;
   }
 
   public void cancel() {

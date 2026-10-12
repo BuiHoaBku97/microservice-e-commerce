@@ -36,12 +36,23 @@ public final class CartDtos {
       Long version,
       Instant createdAt,
       Instant paymentDueAt,
+      ShippingAddressResponse shippingAddress,
       List<OrderItemResponse> items) {}
+
+  public record ShippingAddressResponse(
+      Long addressId,
+      String recipientName,
+      String recipientPhone,
+      String ward,
+      String addressLine,
+      String district,
+      String province) {}
 
   public record OrderItemResponse(Long skuId, Integer quantity, Long unitPrice, Long lineTotal) {}
 
   public record CheckoutRequest(
       @NotNull Long cartVersion,
+      @NotNull Long addressId,
       @NotNull @jakarta.validation.constraints.NotEmpty List<@Valid CheckoutItem> expectedItems) {}
 
   public record CheckoutItem(

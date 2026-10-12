@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import com.ecommerce.order.clients.CatalogCheckoutItem;
 import com.ecommerce.order.clients.CatalogClient;
+import com.ecommerce.order.clients.IdentityCheckoutContext;
+import com.ecommerce.order.clients.IdentityClient;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
@@ -31,6 +33,7 @@ class OrderServiceTest {
   @Mock private InventoryService inventoryService;
   @Mock private OutboxEventService outboxEventService;
   @Mock private CatalogClient catalogClient;
+  @Mock private IdentityClient identityClient;
 
   private OrderService orderService;
 
@@ -38,7 +41,13 @@ class OrderServiceTest {
   void setUp() {
     orderService =
         new OrderService(
-            orderRepository, cartService, inventoryService, outboxEventService, catalogClient, 900);
+            orderRepository,
+            cartService,
+            inventoryService,
+            outboxEventService,
+            catalogClient,
+            identityClient,
+            900);
   }
 
   @Test
@@ -103,10 +112,17 @@ class OrderServiceTest {
     Cart cart = cartWithItem(10L, 2, 150_000L);
     CartDtos.CheckoutRequest request =
         new CartDtos.CheckoutRequest(
-            cart.getVersion(), List.of(new CartDtos.CheckoutItem(10L, 2, 150_000L)));
+            cart.getVersion(), 1L, List.of(new CartDtos.CheckoutItem(10L, 2, 150_000L)));
     when(orderRepository.findByUserIdAndIdempotencyKey(7L, "checkout-1"))
         .thenReturn(Optional.empty(), Optional.empty());
     when(cartService.getForCheckout(7L)).thenReturn(cart);
+    when(identityClient.getCheckoutContext(any(), any()))
+        .thenReturn(
+            new IdentityCheckoutContext(
+                7L,
+                "ACTIVE",
+                new IdentityCheckoutContext.AddressSnapshot(
+                    1L, "Nguyễn Văn A", "0900000000", "1 Đường A", "Phường 1", "Quận 1", "TP HCM")));
     when(catalogClient.getCheckoutItems(any(), any()))
         .thenReturn(
             List.of(
@@ -122,6 +138,9 @@ class OrderServiceTest {
         orderService.checkout(7L, request, "Bearer token", "checkout-1");
 
     org.assertj.core.api.Assertions.assertThat(first.replayed()).isFalse();
+    org.assertj.core.api.Assertions.assertThat(first.order().getShippingAddressId()).isEqualTo(1L);
+    org.assertj.core.api.Assertions.assertThat(first.order().getShippingProvince())
+        .isEqualTo("TP HCM");
     org.assertj.core.api.Assertions.assertThat(replay.replayed()).isTrue();
     org.assertj.core.api.Assertions.assertThat(replay.order()).isSameAs(first.order());
     verify(inventoryService).reserve(Map.of(10L, 2));
