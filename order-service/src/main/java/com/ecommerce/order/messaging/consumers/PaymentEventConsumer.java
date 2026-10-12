@@ -45,6 +45,8 @@ public class PaymentEventConsumer {
         || event.eventType() == null
         || event.eventType().isBlank()
         || !"Payment".equals(payload.path("aggregateType").asText())
+        || event.paymentId() == null
+        || event.paymentId() <= 0
         || payload.path("aggregateId").asLong(0) != event.paymentId()
         || !payload.hasNonNull("occurredAt")) {
       throw new IllegalArgumentException("Envelope sự kiện thanh toán không hợp lệ");

@@ -51,6 +51,15 @@ class PaymentEventConsumerTest {
   }
 
   @Test
+  void shouldRejectMissingPaymentIdAsPermanentValidationError() {
+    assertThatThrownBy(() -> consumer.consume(
+        VALID_EVENT.replace("\"paymentId\":20,", ""), acknowledgment))
+        .isInstanceOf(IllegalStateException.class)
+        .hasCauseInstanceOf(IllegalArgumentException.class);
+    verifyNoInteractions(service, acknowledgment);
+  }
+
+  @Test
   void shouldRejectMissingEventTypeWithoutAcknowledging() {
     assertThatThrownBy(() -> consumer.consume("{}", acknowledgment))
         .isInstanceOf(IllegalStateException.class);

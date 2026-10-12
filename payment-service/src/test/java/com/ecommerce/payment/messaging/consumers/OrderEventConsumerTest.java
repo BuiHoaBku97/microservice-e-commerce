@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.ecommerce.payment.services.PaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.kafka.support.Acknowledgment;
 
 class OrderEventConsumerTest {
@@ -58,10 +60,11 @@ class OrderEventConsumerTest {
     verifyNoInteractions(service, acknowledgment);
   }
 
-  @Test
-  void shouldAcknowledgeKnownUnrelatedEventWithoutChangingBusinessData() {
+  @ParameterizedTest
+  @ValueSource(strings = {"OrderConfirmed", "OrderCancelled", "OrderShipping", "OrderCompleted"})
+  void shouldAcknowledgeKnownUnrelatedEventWithoutChangingBusinessData(String eventType) {
     consumer.consume(
-        "{\"eventId\":\"evt-shipping\",\"eventType\":\"OrderShipping\",\"occurredAt\":\"2026-10-12T10:00:00Z\",\"aggregateType\":\"Order\",\"aggregateId\":10,\"orderId\":10}",
+        VALID_EVENT.replace("OrderCreated", eventType),
         acknowledgment);
     verify(acknowledgment).acknowledge();
     verifyNoInteractions(service);

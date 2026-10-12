@@ -6,6 +6,8 @@ import com.ecommerce.payment.repositories.OutboxEventRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -14,18 +16,25 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class OutboxPublisher {
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(OutboxPublisher.class);
   private final OutboxEventRepository outboxEventRepository;
   private final KafkaTemplate<String, String> kafkaTemplate;
+  private final Counter published;
+  private final Counter failed;
   private final String paymentEventsTopic;
   private final ObjectMapper objectMapper;
 
   public OutboxPublisher(
       OutboxEventRepository outboxEventRepository,
       KafkaTemplate<String, String> kafkaTemplate,
+      MeterRegistry meterRegistry,
       @Value("${app.kafka.topics.payment-events:ecommerce.payment.events}") String paymentEventsTopic,
       ObjectMapper objectMapper) {
     this.outboxEventRepository = outboxEventRepository;
     this.kafkaTemplate = kafkaTemplate;
+    this.published = meterRegistry.counter("outbox.publish", "result", "acknowledged");
+    this.failed = meterRegistry.counter("outbox.publish", "result", "failed");
     this.paymentEventsTopic = paymentEventsTopic;
     this.objectMapper = objectMapper;
   }
@@ -43,8 +52,15 @@ public class OutboxPublisher {
           .send(paymentEventsTopic, partitionKey(event), event.getPayload())
           .get(10, TimeUnit.SECONDS);
       event.markPublished();
+      published.increment();
+      log.info("outbox outcome=published eventId={} aggregateId={} eventType={}",
+          event.getEventId(), event.getAggregateId(), event.getEventType());
     } catch (Exception exception) {
+      if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
       event.markFailed(exception.getMessage());
+      failed.increment();
+      log.warn("outbox outcome=failed eventId={} aggregateId={} eventType={} attempts={}",
+          event.getEventId(), event.getAggregateId(), event.getEventType(), event.getAttempts());
     }
     outboxEventRepository.save(event);
   }

@@ -1,0 +1,43 @@
+plugins {
+    id 'java'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+repositories { mavenCentral() }
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.15'
+        mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2025.0.3'
+    }
+}
+
+dependencies {
+    testImplementation project(':order-service')
+    testImplementation project(':payment-service')
+    testImplementation project(':notification-service')
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'io.micrometer:micrometer-core'
+    testImplementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.redisson:redisson:4.8.0'
+    testImplementation 'org.flywaydb:flyway-core'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    testRuntimeOnly 'org.postgresql:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:kafka'
+}
+
+// Containers run only on explicit request; ordinary unit tests remain Docker-independent.
+tasks.named('test') { useJUnitPlatform { excludeTags 'integration' } }
+tasks.register('integrationTest', Test) {
+    description = 'Real Kafka/PostgreSQL/Redis event flow, replay, concurrency and migration checks'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'integration' }
+    maxParallelForks = 1
+    systemProperty 'repo.root', rootProject.projectDir.absolutePath
+}

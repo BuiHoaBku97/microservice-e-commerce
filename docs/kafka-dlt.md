@@ -58,7 +58,7 @@ Lệnh đọc dùng console consumer riêng, không thay offset của group paym
 ## Gửi lại record đã sửa nguyên nhân lỗi
 
 1. Ghi nhận DLT topic/partition/offset, key, payload và eventId nếu có. Sửa handler hoặc nguyên nhân lỗi trước khi gửi lại.
-2. Kiểm tra dữ liệu nghiệp vụ: hiện mới có dedup theo orderId/trạng thái/deduplicationKey; chưa có processed_events. Không mặc định mọi replay đều an toàn.
+2. Kiểm tra dữ liệu nghiệp vụ: Order dedup payment qua eventId/paymentId trong payment_event_history; Payment dedup theo orderId; Notification dedup theo deduplicationKey. Chưa có processed_events dùng chung cho mọi event.
 3. Gửi lại đúng một record đã chọn lên topic nguồn, giữ nguyên key, payload và eventId. Không tạo ID mới, không thay amount/status để vượt kiểm tra.
 4. Ghi nhận lần redrive, kiểm tra dữ liệu DB, offset, DLT và các consumer liên quan. Publish vào topic nguồn làm mọi consumer group của topic có thể nhận lại record.
 5. Không reset toàn bộ group hoặc xóa topic DLT để xử lý một lỗi đơn lẻ.
@@ -87,4 +87,6 @@ KafkaErrorHandlerTest ở cả ba service sử dụng DefaultErrorHandler và De
 - Recovery lại cùng record khi DLT gửi được.
 - Lỗi vĩnh viễn đi thẳng DLT.
 
-Cần nghiệm thu thêm với broker/DB thật: restart consumer, broker ngừng/phục hồi, offset sau restart và replay không tác động nghiệp vụ hai lần. Docker daemon chưa chạy trong lần triển khai A4; các ví dụ vận hành chưa được thực thi.
+[Bộ test C4](event-flow-c4.md) bổ sung Kafka/PostgreSQL/Redis thật cho luồng ba service,
+restart consumer, offset sau replay, concurrency và DLT. Lỗi gửi DLT và broker unavailable
+được inject bằng mock trong unit test; chưa mô phỏng tắt/bật broker process.

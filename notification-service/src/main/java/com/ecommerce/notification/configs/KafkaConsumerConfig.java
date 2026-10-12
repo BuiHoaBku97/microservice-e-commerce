@@ -54,6 +54,8 @@ public class KafkaConsumerConfig {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(consumerFactory);
+    factory.setRecordInterceptor(new com.ecommerce.notification.messaging.EventRecordInterceptor());
+    factory.getContainerProperties().setMicrometerEnabled(true);
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.setCommonErrorHandler(kafkaErrorHandler);
     return factory;

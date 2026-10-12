@@ -28,7 +28,7 @@ public class OrderEventConsumer {
       switch (payload.path("eventType").asText()) {
         case "OrderCreated" ->
             paymentService.processOrderPayment(OrderCreatedEvent.from(payload));
-        case "OrderShipping", "OrderCompleted" -> {
+        case "OrderConfirmed", "OrderCancelled", "OrderShipping", "OrderCompleted" -> {
           // Các mốc giao hàng không thay đổi giao dịch thanh toán.
         }
         default -> throw new IllegalArgumentException("Loại sự kiện đơn hàng chưa được hỗ trợ");
