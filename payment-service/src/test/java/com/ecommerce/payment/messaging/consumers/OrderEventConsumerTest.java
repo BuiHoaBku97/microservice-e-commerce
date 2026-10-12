@@ -17,7 +17,7 @@ class OrderEventConsumerTest {
   private final PaymentService service = mock(PaymentService.class);
   private final Acknowledgment acknowledgment = mock(Acknowledgment.class);
   private final OrderEventConsumer consumer = new OrderEventConsumer(new ObjectMapper(), service);
-  private static final String VALID_EVENT = "{\"eventType\":\"OrderCreated\",\"orderId\":10,\"userId\":1,\"totalAmount\":100000,\"currency\":\"VND\"}";
+  private static final String VALID_EVENT = "{\"eventId\":\"evt-1\",\"eventType\":\"OrderCreated\",\"occurredAt\":\"2026-10-12T10:00:00Z\",\"aggregateType\":\"Order\",\"aggregateId\":10,\"orderId\":10,\"userId\":1,\"totalAmount\":100000,\"currency\":\"VND\"}";
 
   @Test
   void shouldAcknowledgeOnlyAfterServiceReturnsSuccessfully() {
@@ -60,9 +60,10 @@ class OrderEventConsumerTest {
 
   @Test
   void shouldAcknowledgeKnownUnrelatedEventWithoutChangingBusinessData() {
-    consumer.consume("{\"eventType\":\"OrderShipping\"}", acknowledgment);
+    consumer.consume(
+        "{\"eventId\":\"evt-shipping\",\"eventType\":\"OrderShipping\",\"occurredAt\":\"2026-10-12T10:00:00Z\",\"aggregateType\":\"Order\",\"aggregateId\":10,\"orderId\":10}",
+        acknowledgment);
     verify(acknowledgment).acknowledge();
     verifyNoInteractions(service);
   }
 }
-

@@ -24,6 +24,7 @@ public class OrderEventConsumer {
   public void consume(String message, Acknowledgment acknowledgment) {
     try {
       JsonNode payload = objectMapper.readTree(message);
+      validateEnvelope(payload);
       switch (payload.path("eventType").asText()) {
         case "OrderCreated" ->
             paymentService.processOrderPayment(OrderCreatedEvent.from(payload));
@@ -35,6 +36,21 @@ public class OrderEventConsumer {
       acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Không thể xử lý sự kiện đơn hàng", exception);
+    }
+  }
+
+  private void validateEnvelope(JsonNode payload) {
+    if (payload.path("eventId").asText().isBlank()
+        || payload.path("eventType").asText().isBlank()
+        || !"Order".equals(payload.path("aggregateType").asText())
+        || payload.path("aggregateId").asLong(0) != payload.path("orderId").asLong(0)
+        || !payload.hasNonNull("occurredAt")) {
+      throw new IllegalArgumentException("Envelope sự kiện đơn hàng không hợp lệ");
+    }
+    try {
+      java.time.Instant.parse(payload.get("occurredAt").asText());
+    } catch (Exception exception) {
+      throw new IllegalArgumentException("occurredAt không hợp lệ", exception);
     }
   }
 }

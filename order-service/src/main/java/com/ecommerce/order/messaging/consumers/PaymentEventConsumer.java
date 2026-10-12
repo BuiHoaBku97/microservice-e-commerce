@@ -25,6 +25,7 @@ public class PaymentEventConsumer {
     try {
       JsonNode payload = objectMapper.readTree(message);
       PaymentEvent event = PaymentEvent.from(payload);
+      validateEnvelope(payload, event);
       if ("PaymentSucceeded".equals(event.eventType())) {
         orderService.handlePaymentSucceeded(event);
       } else if ("PaymentFailed".equals(event.eventType())) {
@@ -35,6 +36,23 @@ public class PaymentEventConsumer {
       acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Không thể xử lý sự kiện thanh toán", exception);
+    }
+  }
+
+  private void validateEnvelope(JsonNode payload, PaymentEvent event) {
+    if (event.eventId() == null
+        || event.eventId().isBlank()
+        || event.eventType() == null
+        || event.eventType().isBlank()
+        || !"Payment".equals(payload.path("aggregateType").asText())
+        || payload.path("aggregateId").asLong(0) != event.paymentId()
+        || !payload.hasNonNull("occurredAt")) {
+      throw new IllegalArgumentException("Envelope sự kiện thanh toán không hợp lệ");
+    }
+    try {
+      java.time.Instant.parse(payload.get("occurredAt").asText());
+    } catch (Exception exception) {
+      throw new IllegalArgumentException("occurredAt không hợp lệ", exception);
     }
   }
 }

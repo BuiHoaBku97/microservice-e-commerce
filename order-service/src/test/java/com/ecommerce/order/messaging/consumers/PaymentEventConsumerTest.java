@@ -16,7 +16,7 @@ class PaymentEventConsumerTest {
   private final Acknowledgment acknowledgment = mock(Acknowledgment.class);
   private final PaymentEventConsumer consumer = new PaymentEventConsumer(new ObjectMapper(), service);
   private static final String VALID_EVENT =
-      "{\"eventId\":\"evt-1\",\"eventType\":\"PaymentSucceeded\",\"paymentId\":20,\"orderId\":10,\"amount\":100,\"currency\":\"VND\",\"paymentDueAt\":\"2026-10-12T10:00:00Z\"}";
+      "{\"eventId\":\"evt-1\",\"eventType\":\"PaymentSucceeded\",\"occurredAt\":\"2026-10-12T10:00:00Z\",\"aggregateType\":\"Payment\",\"aggregateId\":20,\"paymentId\":20,\"orderId\":10,\"amount\":100,\"currency\":\"VND\",\"paymentDueAt\":\"2026-10-12T10:00:00Z\"}";
 
   @Test
   void shouldAcknowledgeOnlyAfterServiceReturnsSuccessfully() {
