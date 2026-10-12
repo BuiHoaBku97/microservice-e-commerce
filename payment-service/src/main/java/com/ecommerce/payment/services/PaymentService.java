@@ -26,7 +26,14 @@ public class PaymentService {
     }
 
     Payment payment =
-        new Payment(order.orderId(), order.userId(), order.totalAmount(), order.currency());
+        new Payment(
+            order.orderId(),
+            order.userId(),
+            order.totalAmount(),
+            order.currency(),
+            order.paymentDueAt() == null
+                ? java.time.Instant.now().plusSeconds(900)
+                : order.paymentDueAt());
     if (order.totalAmount() == null || order.totalAmount() <= 0) {
       payment.fail("Số tiền thanh toán không hợp lệ");
     } else {

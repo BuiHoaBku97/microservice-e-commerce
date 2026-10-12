@@ -48,6 +48,9 @@ public class Payment {
   private String failureReason;
 
   @Column(nullable = false, updatable = false)
+  private Instant paymentDueAt;
+
+  @Column(nullable = false, updatable = false)
   private Instant createdAt;
 
   @Column(nullable = false)
@@ -58,10 +61,15 @@ public class Payment {
   private Long version = 0L;
 
   public Payment(Long orderId, Long userId, Long amount, String currency) {
+    this(orderId, userId, amount, currency, Instant.now().plusSeconds(900));
+  }
+
+  public Payment(Long orderId, Long userId, Long amount, String currency, Instant paymentDueAt) {
     this.orderId = orderId;
     this.userId = userId;
     this.amount = amount;
     this.currency = currency;
+    this.paymentDueAt = paymentDueAt;
   }
 
   public void complete(String providerReference) {

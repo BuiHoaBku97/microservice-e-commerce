@@ -128,6 +128,29 @@ public class InventoryService {
         status -> releaseInTransaction(quantities)));
   }
 
+  public void finalizeReservation(Map<Long, Integer> quantities) {
+    withInventoryLocks(
+        quantities,
+        () ->
+            transactionTemplate.executeWithoutResult(
+                status -> finalizeReservationInTransaction(quantities)));
+  }
+
+  private void finalizeReservationInTransaction(Map<Long, Integer> quantities) {
+    List<Inventory> inventoryList =
+        inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().sorted().toList());
+    Map<Long, Inventory> bySkuId =
+        inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
+    quantities.forEach(
+        (skuId, quantity) -> {
+          Inventory inventory = bySkuId.get(skuId);
+          if (inventory == null) {
+            throw new IllegalStateException("INVALID_INVENTORY_RESERVATION");
+          }
+          inventory.finalizeReservation(quantity);
+        });
+  }
+
   private void releaseInTransaction(Map<Long, Integer> quantities) {
     List<Inventory> inventoryList =
         inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().sorted().toList());

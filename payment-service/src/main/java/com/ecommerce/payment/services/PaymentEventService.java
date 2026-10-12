@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,29 +24,22 @@ public class PaymentEventService {
   @Transactional
   public void enqueuePaymentResult(Payment payment) {
     String eventType =
-        payment.getStatus().name().equals("COMPLETED") ? "PaymentCompleted" : "PaymentFailed";
+        payment.getStatus().name().equals("COMPLETED") ? "PaymentSucceeded" : "PaymentFailed";
     try {
       String payload =
           objectMapper.writeValueAsString(
-              Map.of(
-                  "eventType",
-                  eventType,
-                  "paymentId",
-                  payment.getId(),
-                  "orderId",
-                  payment.getOrderId(),
-                  "userId",
-                  payment.getUserId(),
-                  "amount",
-                  payment.getAmount(),
-                  "currency",
-                  payment.getCurrency(),
-                  "status",
-                  payment.getStatus(),
-                  "providerReference",
-                  payment.getProviderReference() == null ? "" : payment.getProviderReference(),
-                  "failureReason",
-                  payment.getFailureReason() == null ? "" : payment.getFailureReason()));
+               Map.ofEntries(
+                  Map.entry("eventId", UUID.randomUUID().toString()),
+                  Map.entry("eventType", eventType),
+                  Map.entry("paymentId", payment.getId()),
+                  Map.entry("orderId", payment.getOrderId()),
+                  Map.entry("userId", payment.getUserId()),
+                  Map.entry("amount", payment.getAmount()),
+                  Map.entry("currency", payment.getCurrency()),
+                  Map.entry("paymentDueAt", payment.getPaymentDueAt()),
+                  Map.entry("status", payment.getStatus()),
+                  Map.entry("providerReference", payment.getProviderReference() == null ? "" : payment.getProviderReference()),
+                  Map.entry("failureReason", payment.getFailureReason() == null ? "" : payment.getFailureReason())));
       outboxEventRepository.save(new OutboxEvent("Payment", payment.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Không thể tạo sự kiện thanh toán", exception);

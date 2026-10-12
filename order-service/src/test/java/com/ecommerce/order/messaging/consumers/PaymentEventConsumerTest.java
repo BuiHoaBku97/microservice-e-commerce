@@ -15,20 +15,21 @@ class PaymentEventConsumerTest {
   private final OrderService service = mock(OrderService.class);
   private final Acknowledgment acknowledgment = mock(Acknowledgment.class);
   private final PaymentEventConsumer consumer = new PaymentEventConsumer(new ObjectMapper(), service);
-  private static final String VALID_EVENT = "{\"eventType\":\"PaymentCompleted\",\"orderId\":10}";
+  private static final String VALID_EVENT =
+      "{\"eventId\":\"evt-1\",\"eventType\":\"PaymentSucceeded\",\"paymentId\":20,\"orderId\":10,\"amount\":100,\"currency\":\"VND\",\"paymentDueAt\":\"2026-10-12T10:00:00Z\"}";
 
   @Test
   void shouldAcknowledgeOnlyAfterServiceReturnsSuccessfully() {
     consumer.consume(VALID_EVENT, acknowledgment);
     var order = inOrder(service, acknowledgment);
-    order.verify(service).handlePaymentCompleted(10L);
+    order.verify(service).handlePaymentSucceeded(org.mockito.ArgumentMatchers.any());
     order.verify(acknowledgment).acknowledge();
   }
 
   @Test
   void shouldNotAcknowledgeWhenServiceFails() {
     doThrow(new IllegalStateException("Giao dịch thất bại"))
-        .when(service).handlePaymentCompleted(10L);
+        .when(service).handlePaymentSucceeded(org.mockito.ArgumentMatchers.any());
     assertThatThrownBy(() -> consumer.consume(VALID_EVENT, acknowledgment))
         .isInstanceOf(IllegalStateException.class);
     verifyNoInteractions(acknowledgment);
@@ -44,7 +45,7 @@ class PaymentEventConsumerTest {
   @Test
   void shouldRejectUnsupportedEventWithoutAcknowledging() {
     assertThatThrownBy(
-            () -> consumer.consume("{\"eventType\":\"PaymentSucceeded\"}", acknowledgment))
+            () -> consumer.consume("{\"eventType\":\"PaymentCompleted\"}", acknowledgment))
         .isInstanceOf(IllegalStateException.class);
     verifyNoInteractions(service, acknowledgment);
   }

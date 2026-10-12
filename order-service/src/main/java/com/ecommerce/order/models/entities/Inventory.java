@@ -20,4 +20,14 @@ public class Inventory {
   private Long version = 0L;
   private Instant createdAt;
   private Instant updatedAt;
+
+  public void finalizeReservation(int quantity) {
+    if (quantity <= 0 || reserved < quantity || onHand < quantity) {
+      throw new IllegalStateException("INVALID_INVENTORY_RESERVATION");
+    }
+    reserved -= quantity;
+    onHand -= quantity;
+    version++;
+    updatedAt = Instant.now();
+  }
 }

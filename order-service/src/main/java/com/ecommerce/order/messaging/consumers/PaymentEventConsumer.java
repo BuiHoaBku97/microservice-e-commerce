@@ -25,10 +25,10 @@ public class PaymentEventConsumer {
     try {
       JsonNode payload = objectMapper.readTree(message);
       PaymentEvent event = PaymentEvent.from(payload);
-      if ("PaymentCompleted".equals(event.eventType())) {
-        orderService.handlePaymentCompleted(event.orderId());
+      if ("PaymentSucceeded".equals(event.eventType())) {
+        orderService.handlePaymentSucceeded(event);
       } else if ("PaymentFailed".equals(event.eventType())) {
-        orderService.handlePaymentFailed(event.orderId());
+        orderService.handlePaymentFailed(event);
       } else {
         throw new IllegalArgumentException("Loại sự kiện thanh toán chưa được hỗ trợ");
       }

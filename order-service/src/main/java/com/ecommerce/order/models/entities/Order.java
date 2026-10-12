@@ -147,6 +147,18 @@ public class Order {
     }
   }
 
+  public void markPaymentReview() {
+    if (status == OrderStatus.PENDING) {
+      status = OrderStatus.PAYMENT_REVIEW;
+    }
+  }
+
+  public void confirm() {
+    if (status == OrderStatus.PENDING) {
+      status = OrderStatus.CONFIRMED;
+    }
+  }
+
   @PrePersist
   void onCreate() {
     Instant now = Instant.now();

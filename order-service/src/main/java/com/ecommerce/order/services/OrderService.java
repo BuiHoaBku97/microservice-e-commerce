@@ -16,8 +16,13 @@ import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderItem;
+import com.ecommerce.order.models.entities.PaymentEventHistory;
+import com.ecommerce.order.models.entities.PaymentEventResult;
+import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.repositories.OrderRepository;
+import com.ecommerce.order.repositories.PaymentEventHistoryRepository;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -43,6 +48,30 @@ public class OrderService {
   private final CatalogClient catalogClient;
   private final IdentityClient identityClient;
   private final long paymentTimeoutSeconds;
+  private final PaymentEventHistoryRepository paymentEventHistoryRepository;
+
+  @Autowired
+  public OrderService(
+      OrderRepository ordersRepository,
+      CartService cartService,
+      InventoryService inventoryService,
+      OutboxEventService outboxEventService,
+      CatalogClient catalogClient,
+      IdentityClient identityClient,
+      PaymentEventHistoryRepository paymentEventHistoryRepository,
+      @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
+    this.ordersRepository = ordersRepository;
+    this.cartService = cartService;
+    this.inventoryService = inventoryService;
+    this.outboxEventService = outboxEventService;
+    this.catalogClient = catalogClient;
+    this.identityClient = identityClient;
+    this.paymentEventHistoryRepository = paymentEventHistoryRepository;
+    if (paymentTimeoutSeconds <= 0) {
+      throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
+    }
+    this.paymentTimeoutSeconds = paymentTimeoutSeconds;
+  }
 
   public OrderService(
       OrderRepository ordersRepository,
@@ -51,17 +80,16 @@ public class OrderService {
       OutboxEventService outboxEventService,
       CatalogClient catalogClient,
       IdentityClient identityClient,
-      @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
-    this.ordersRepository = ordersRepository;
-    this.cartService = cartService;
-    this.inventoryService = inventoryService;
-    this.outboxEventService = outboxEventService;
-    this.catalogClient = catalogClient;
-    this.identityClient = identityClient;
-    if (paymentTimeoutSeconds <= 0) {
-      throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
-    }
-    this.paymentTimeoutSeconds = paymentTimeoutSeconds;
+      long paymentTimeoutSeconds) {
+    this(
+        ordersRepository,
+        cartService,
+        inventoryService,
+        outboxEventService,
+        catalogClient,
+        identityClient,
+        null,
+        paymentTimeoutSeconds);
   }
 
   @Transactional
@@ -342,9 +370,94 @@ public class OrderService {
     return ordersRepository.save(order);
   }
 
+  @Transactional
+  public Order handlePaymentSucceeded(PaymentEvent event) {
+    Order order = getForUpdate(event.orderId());
+    if (isDuplicate(event)) {
+      return order;
+    }
+    String invalidReason = validatePayment(event, order);
+    if (invalidReason != null) {
+      rejectPayment(order, event, invalidReason);
+      return ordersRepository.save(order);
+    }
+    inventoryService.finalizeReservation(quantities(order));
+    order.confirm();
+    PaymentEventHistory history =
+        new PaymentEventHistory(
+            event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.ACCEPTED, "accepted");
+    paymentEventHistoryRepository.save(history);
+    Order saved = ordersRepository.save(order);
+    outboxEventService.enqueueOrderConfirmed(saved);
+    return saved;
+  }
+
+  @Transactional
+  public Order handlePaymentFailed(PaymentEvent event) {
+    Order order = getForUpdate(event.orderId());
+    if (isDuplicate(event)) {
+      return order;
+    }
+    String invalidReason = validatePayment(event, order);
+    if (invalidReason != null) {
+      rejectPayment(order, event, invalidReason);
+      return ordersRepository.save(order);
+    }
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING) {
+      inventoryService.release(quantities(order));
+      order.markPaymentFailed();
+    }
+    paymentEventHistoryRepository.save(
+        new PaymentEventHistory(
+            event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.FAILED,
+            event.failureReason() == null ? "payment_failed" : event.failureReason()));
+    return ordersRepository.save(order);
+  }
+
+  private String validatePayment(PaymentEvent event, Order order) {
+    if (event.eventId() == null || event.eventId().isBlank()) return "EVENT_ID_REQUIRED";
+    if (event.paymentId() == null || event.paymentId() <= 0) return "INVALID_PAYMENT_ID";
+    if (order.getId() != null && !Objects.equals(event.orderId(), order.getId())) {
+      return "INVALID_ORDER_ID";
+    }
+    if (!Objects.equals(event.amount(), order.getTotalAmount())) return "PAYMENT_AMOUNT_MISMATCH";
+    if (!Objects.equals(event.currency(), order.getCurrency())) return "PAYMENT_CURRENCY_MISMATCH";
+    if (!Objects.equals(event.paymentDueAt(), order.getPaymentDueAt())) return "PAYMENT_DUE_AT_MISMATCH";
+    if (order.getPaymentDueAt().isBefore(Instant.now())) return "PAYMENT_EXPIRED";
+    if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING) {
+      return "ORDER_NOT_PENDING";
+    }
+    return null;
+  }
+
+  private boolean isDuplicate(PaymentEvent event) {
+    return (event.eventId() != null && paymentEventHistoryRepository.existsByEventId(event.eventId()))
+        || (event.paymentId() != null
+            && paymentEventHistoryRepository.existsByPaymentId(event.paymentId()));
+  }
+
+  private void rejectPayment(Order order, PaymentEvent event, String reason) {
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING) {
+      inventoryService.release(quantities(order));
+      order.markPaymentReview();
+    }
+    paymentEventHistoryRepository.save(
+        new PaymentEventHistory(
+            event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.REVIEW, reason));
+  }
+
   private Order get(Long orderId) {
     return ordersRepository
         .findById(orderId)
+        .orElseThrow(() -> new OrderNotFoundException(orderId));
+  }
+
+  private Order getForUpdate(Long orderId) {
+    if (orderId == null) {
+      throw new IllegalArgumentException("ORDER_ID_REQUIRED");
+    }
+    return ordersRepository
+        .findByIdForUpdate(orderId)
         .orElseThrow(() -> new OrderNotFoundException(orderId));
   }
 

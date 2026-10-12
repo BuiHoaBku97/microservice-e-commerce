@@ -31,6 +31,11 @@ public class OutboxEventService {
     enqueue("OrderCancelled", order);
   }
 
+  @Transactional
+  public void enqueueOrderConfirmed(Order order) {
+    enqueue("OrderConfirmed", order);
+  }
+
   private void enqueue(String eventType, Order order) {
     try {
       String payload = objectMapper.writeValueAsString(payload(eventType, order));
@@ -68,6 +73,8 @@ public class OutboxEventService {
         order.getTotalAmount(),
         "currency",
         order.getCurrency(),
+        "paymentDueAt",
+        order.getPaymentDueAt(),
         "items",
         items);
   }

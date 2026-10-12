@@ -15,8 +15,10 @@ import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderStatus;
+import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.repositories.OrderRepository;
+import com.ecommerce.order.repositories.PaymentEventHistoryRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,6 +36,7 @@ class OrderServiceTest {
   @Mock private OutboxEventService outboxEventService;
   @Mock private CatalogClient catalogClient;
   @Mock private IdentityClient identityClient;
+  @Mock private PaymentEventHistoryRepository paymentEventHistoryRepository;
 
   private OrderService orderService;
 
@@ -185,6 +188,76 @@ class OrderServiceTest {
 
     assertEquals(OrderStatus.PAYMENT_FAILED, failed.getStatus());
     verify(inventoryService).release(Map.of(10L, 2));
+  }
+
+  @Test
+  void handlePaymentSucceeded_shouldFinalizeInventoryAndConfirmOrder() {
+    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(paymentEventHistoryRepository.existsByEventId("evt-1")).thenReturn(false);
+    when(paymentEventHistoryRepository.existsByPaymentId(20L)).thenReturn(false);
+    when(orderRepository.save(order)).thenReturn(order);
+
+    Order confirmed = orderServiceWithHistory().handlePaymentSucceeded(
+        new PaymentEvent("evt-1", "PaymentSucceeded", 20L, 3L, 300_000L, "VND", order.getPaymentDueAt(), null));
+
+    assertEquals(OrderStatus.CONFIRMED, confirmed.getStatus());
+    verify(inventoryService).finalizeReservation(Map.of(10L, 2));
+    verify(outboxEventService).enqueueOrderConfirmed(order);
+    verify(paymentEventHistoryRepository).save(any());
+  }
+
+  @Test
+  void handlePaymentSucceeded_shouldReviewAndNeverFinalizeWhenAmountIsWrong() {
+    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(paymentEventHistoryRepository.existsByEventId("evt-2")).thenReturn(false);
+    when(paymentEventHistoryRepository.existsByPaymentId(21L)).thenReturn(false);
+    when(orderRepository.save(order)).thenReturn(order);
+
+    Order reviewed = orderServiceWithHistory().handlePaymentSucceeded(
+        new PaymentEvent("evt-2", "PaymentSucceeded", 21L, 3L, 1L, "VND", order.getPaymentDueAt(), null));
+
+    assertEquals(OrderStatus.PAYMENT_REVIEW, reviewed.getStatus());
+    verify(inventoryService).release(Map.of(10L, 2));
+    verify(inventoryService, never()).finalizeReservation(any());
+  }
+
+  @Test
+  void handlePaymentSucceeded_shouldReviewLateCallbackAndNeverFinalize() {
+    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().minusSeconds(1));
+    order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(paymentEventHistoryRepository.existsByEventId("evt-late")).thenReturn(false);
+    when(paymentEventHistoryRepository.existsByPaymentId(23L)).thenReturn(false);
+    when(orderRepository.save(order)).thenReturn(order);
+
+    Order reviewed = orderServiceWithHistory().handlePaymentSucceeded(
+        new PaymentEvent("evt-late", "PaymentSucceeded", 23L, 3L, 300_000L, "VND", order.getPaymentDueAt(), null));
+
+    assertEquals(OrderStatus.PAYMENT_REVIEW, reviewed.getStatus());
+    verify(inventoryService).release(Map.of(10L, 2));
+    verify(inventoryService, never()).finalizeReservation(any());
+  }
+
+  @Test
+  void handlePaymentSucceeded_shouldIgnoreReplayAfterFirstHistoryRecord() {
+    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(paymentEventHistoryRepository.existsByEventId("evt-3")).thenReturn(true);
+
+    orderServiceWithHistory().handlePaymentSucceeded(
+        new PaymentEvent("evt-3", "PaymentSucceeded", 22L, 3L, 300_000L, "VND", order.getPaymentDueAt(), null));
+
+    verify(inventoryService, never()).finalizeReservation(any());
+    verify(paymentEventHistoryRepository, never()).save(any());
+  }
+
+  private OrderService orderServiceWithHistory() {
+    return new OrderService(orderRepository, cartService, inventoryService, outboxEventService,
+        catalogClient, identityClient, paymentEventHistoryRepository, 900);
   }
 
   private Cart cartWithItem(Long skuId, int quantity, long unitPrice) {

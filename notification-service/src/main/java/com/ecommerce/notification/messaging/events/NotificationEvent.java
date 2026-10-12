@@ -26,7 +26,7 @@ public record NotificationEvent(
         title = "Đơn hàng đã được tạo";
         message = "Đơn hàng #" + referenceId + " đã được tạo và đang chờ thanh toán.";
       }
-      case "PaymentCompleted" -> {
+      case "PaymentCompleted", "PaymentSucceeded" -> {
         title = "Thanh toán thành công";
         message = "Đơn hàng #" + referenceId + " đã được thanh toán thành công.";
       }
@@ -37,6 +37,10 @@ public record NotificationEvent(
       case "OrderCancelled" -> {
         title = "Đơn hàng đã bị hủy";
         message = "Đơn hàng #" + referenceId + " đã được hủy.";
+      }
+      case "OrderConfirmed" -> {
+        title = "Đơn hàng đã được xác nhận";
+        message = "Đơn hàng #" + referenceId + " đã được xác nhận sau khi thanh toán.";
       }
       default -> throw new IllegalArgumentException("Loại sự kiện không được hỗ trợ");
     }
