@@ -41,3 +41,14 @@ OpenFeign tắt retry tự động, timeout mặc định 2 giây kết nối v�
 Identity checkout-context và địa chỉ giao hàng chưa được triển khai vì Identity
 service hiện chưa có bảng `addresses`. Đây là phần phụ thuộc còn mở của B2;
 không coi `addressId` do client gửi là địa chỉ đã xác minh.
+
+## Idempotency checkout
+
+Checkout public dùng `POST /api/v1/orders/checkout` và bắt buộc header
+`Idempotency-Key`. Order lưu hash payload cùng order. Retry cùng key và cùng
+payload trả order đã tạo kèm header `Idempotency-Replayed: true`; cùng key
+nhưng payload khác trả `409 IDEMPOTENCY_KEY_REUSED`.
+
+Các request checkout đồng thời cùng user được serialize bằng pessimistic lock
+trên Cart và unique index `(user_id, idempotency_key)`. Request chạy sau kiểm tra
+lại idempotency sau khi nhận lock để replay order đã commit.

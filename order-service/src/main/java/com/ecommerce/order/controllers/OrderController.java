@@ -9,6 +9,7 @@ import com.ecommerce.order.services.InventoryService;
 import com.ecommerce.order.services.OrderService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -69,12 +71,23 @@ public class OrderController {
     return ResponseEntity.noContent().build();
   }
 
-  @PostMapping("/orders")
-  public CartDtos.OrderResponse createOrder(
-      Authentication authentication, @Valid @RequestBody CartDtos.CheckoutRequest request) {
-    return orderResponse(
-        orderService.createFromCart(
-            userId(authentication), request, "Bearer " + authentication.getCredentials()));
+  @PostMapping("/orders/checkout")
+  public ResponseEntity<CartDtos.OrderResponse> createOrder(
+      Authentication authentication,
+      @RequestHeader("Idempotency-Key") String idempotencyKey,
+      @Valid @RequestBody CartDtos.CheckoutRequest request) {
+    OrderService.CheckoutResult result =
+        orderService.checkout(
+            userId(authentication),
+            request,
+            "Bearer " + authentication.getCredentials(),
+            idempotencyKey);
+    ResponseEntity.BodyBuilder response =
+        result.replayed() ? ResponseEntity.ok() : ResponseEntity.status(HttpStatus.CREATED);
+    if (result.replayed()) {
+      response.header("Idempotency-Replayed", "true");
+    }
+    return response.body(orderResponse(result.order()));
   }
 
   @GetMapping("/orders")

@@ -56,6 +56,12 @@ public class Order {
   @Column(nullable = false)
   private Instant updatedAt;
 
+  @Column(name = "idempotency_key", length = 100)
+  private String idempotencyKey;
+
+  @Column(name = "idempotency_hash", length = 64)
+  private String idempotencyHash;
+
   @OneToMany(
       mappedBy = "order",
       cascade = CascadeType.ALL,
@@ -77,6 +83,11 @@ public class Order {
   public void addItem(OrderItem item) {
     item.assignOrder(this);
     items.add(item);
+  }
+
+  public void setIdempotency(String idempotencyKey, String idempotencyHash) {
+    this.idempotencyKey = idempotencyKey;
+    this.idempotencyHash = idempotencyHash;
   }
 
   public void cancel() {

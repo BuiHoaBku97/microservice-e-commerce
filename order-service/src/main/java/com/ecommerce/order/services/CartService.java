@@ -30,6 +30,13 @@ public class CartService {
   }
 
   @Transactional
+  public Cart getForCheckout(Long userId) {
+    return cartRepository
+        .findByUserIdForUpdate(userId)
+        .orElseGet(() -> getOrCreate(userId));
+  }
+
+  @Transactional
   public Cart add(Long userId, CartDtos.CartItemRequest request, Long expectedVersion) {
     Cart cart = checkedCart(userId, expectedVersion);
     CartItem item =

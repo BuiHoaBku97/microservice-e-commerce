@@ -13,6 +13,7 @@ import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderStatus;
+import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.repositories.OrderRepository;
 import java.util.List;
 import java.util.Map;
@@ -95,6 +96,36 @@ class OrderServiceTest {
         .hasMessage("SKU_NOT_SELLABLE");
     verify(inventoryService, never()).reserve(any());
     verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void checkout_shouldReplaySameOrderForSameIdempotencyKey() {
+    Cart cart = cartWithItem(10L, 2, 150_000L);
+    CartDtos.CheckoutRequest request =
+        new CartDtos.CheckoutRequest(
+            cart.getVersion(), List.of(new CartDtos.CheckoutItem(10L, 2, 150_000L)));
+    when(orderRepository.findByUserIdAndIdempotencyKey(7L, "checkout-1"))
+        .thenReturn(Optional.empty(), Optional.empty());
+    when(cartService.getForCheckout(7L)).thenReturn(cart);
+    when(catalogClient.getCheckoutItems(any(), any()))
+        .thenReturn(
+            List.of(
+                new CatalogCheckoutItem(
+                    10L, 20L, "SKU-10", "Sản phẩm", "RED", "M", 150_000L, "VND", 1L, true)));
+    when(orderRepository.save(any(Order.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    OrderService.CheckoutResult first = orderService.checkout(7L, request, "Bearer token", "checkout-1");
+    when(orderRepository.findByUserIdAndIdempotencyKey(7L, "checkout-1"))
+        .thenReturn(Optional.of(first.order()));
+    OrderService.CheckoutResult replay =
+        orderService.checkout(7L, request, "Bearer token", "checkout-1");
+
+    org.assertj.core.api.Assertions.assertThat(first.replayed()).isFalse();
+    org.assertj.core.api.Assertions.assertThat(replay.replayed()).isTrue();
+    org.assertj.core.api.Assertions.assertThat(replay.order()).isSameAs(first.order());
+    verify(inventoryService).reserve(Map.of(10L, 2));
+    verify(cartService).clear(eq(7L), eq(cart.getVersion()));
   }
 
   @Test

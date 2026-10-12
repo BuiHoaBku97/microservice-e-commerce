@@ -14,6 +14,12 @@ public class GlobalExceptionHandler {
     return Map.of("code", "ORDER_NOT_FOUND", "message", exception.getMessage());
   }
 
+  @ExceptionHandler(IdempotencyKeyConflictException.class)
+  @ResponseStatus(HttpStatus.CONFLICT)
+  public Map<String, Object> idempotencyConflict(IdempotencyKeyConflictException exception) {
+    return Map.of("code", "IDEMPOTENCY_KEY_REUSED", "message", exception.getMessage());
+  }
+
   @ExceptionHandler(IllegalArgumentException.class)
   @ResponseStatus(HttpStatus.BAD_REQUEST)
   public Map<String, Object> badRequest(IllegalArgumentException exception) {
