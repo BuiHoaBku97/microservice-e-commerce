@@ -28,3 +28,7 @@ eureka:
 
 server:
   port: 8081
+
+security:
+  internal:
+    service-token: ${INTERNAL_SERVICE_TOKEN:}

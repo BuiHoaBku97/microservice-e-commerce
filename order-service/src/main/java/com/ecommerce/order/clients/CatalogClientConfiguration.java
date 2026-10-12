@@ -5,6 +5,7 @@ import feign.Retryer;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import feign.RequestInterceptor;
 
 public class CatalogClientConfiguration {
   @Bean
@@ -18,5 +19,11 @@ public class CatalogClientConfiguration {
   @Bean
   Retryer catalogRetryer() {
     return Retryer.NEVER_RETRY;
+  }
+
+  @Bean
+  RequestInterceptor catalogServiceTokenInterceptor(
+      @Value("${app.clients.internal-service-token:}") String serviceToken) {
+    return template -> template.header("X-Internal-Service-Token", serviceToken);
   }
 }

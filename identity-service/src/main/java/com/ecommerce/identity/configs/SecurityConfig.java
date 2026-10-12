@@ -23,7 +23,10 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter)
+  SecurityFilterChain securityFilterChain(
+      HttpSecurity http,
+      JwtAuthenticationFilter jwtFilter,
+      InternalServiceTokenFilter internalServiceTokenFilter)
       throws Exception {
     return http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(
@@ -32,11 +35,14 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/api/v1/auth/**", "/actuator/health")
                     .permitAll()
+                    .requestMatchers("/internal/**")
+                    .hasAuthority("SCOPE_INTERNAL_SERVICE")
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(
             jwtFilter,
             org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(internalServiceTokenFilter, JwtAuthenticationFilter.class)
         .build();
   }
 
