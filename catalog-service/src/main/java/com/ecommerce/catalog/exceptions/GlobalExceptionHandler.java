@@ -37,6 +37,7 @@ public class GlobalExceptionHandler {
         switch (code == null ? "" : code) {
           case "CATEGORY_NOT_FOUND" -> "Không tìm thấy danh mục";
           case "PRODUCT_NOT_FOUND" -> "Không tìm thấy sản phẩm đang được bán";
+          case "SKU_NOT_FOUND" -> "Không tìm thấy SKU";
           default -> "Dữ liệu danh mục hoặc sản phẩm không hợp lệ";
         };
     return ResponseEntity.status(status)
@@ -47,7 +48,12 @@ public class GlobalExceptionHandler {
   ResponseEntity<ApiResponse<Void>> conflict(
       IllegalStateException exception, HttpServletRequest request) {
     String code = exception.getMessage();
-    String message = "SKU_EXISTS".equals(code) ? "Mã SKU đã tồn tại" : "Danh mục đã tồn tại";
+    String message =
+        "SKU_EXISTS".equals(code)
+            ? "Mã SKU đã tồn tại"
+            : "SKU_NOT_SELLABLE".equals(code)
+                ? "SKU hoặc sản phẩm không còn được bán"
+                : "Danh mục đã tồn tại";
     return ResponseEntity.status(HttpStatus.CONFLICT)
         .body(new ApiResponse<>(code, message, null, request.getRequestId()));
   }

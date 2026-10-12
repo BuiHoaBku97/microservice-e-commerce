@@ -4,6 +4,7 @@ import com.ecommerce.catalog.models.dtos.requests.CreateCategoryRequest;
 import com.ecommerce.catalog.models.dtos.requests.CreateProductRequest;
 import com.ecommerce.catalog.models.dtos.requests.CreateSkuRequest;
 import com.ecommerce.catalog.models.dtos.responses.CategoryResponse;
+import com.ecommerce.catalog.models.dtos.responses.CheckoutItemResponse;
 import com.ecommerce.catalog.models.dtos.responses.ProductResponse;
 import com.ecommerce.catalog.models.dtos.responses.SkuResponse;
 import com.ecommerce.catalog.models.entities.Category;
@@ -126,6 +127,45 @@ public class CatalogServiceImpl implements CatalogService {
                             .toList()))
             .filter(product -> !product.skus().isEmpty())
             .toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<CheckoutItemResponse> getCheckoutItems(List<Long> skuIds) {
+    if (skuIds == null
+        || skuIds.isEmpty()
+        || skuIds.size() > 100
+        || skuIds.stream().anyMatch(id -> id == null || id <= 0)
+        || skuIds.size() != skuIds.stream().distinct().count()) {
+      throw new IllegalArgumentException("Danh sách SKU checkout không hợp lệ");
+    }
+
+    return skuIds.stream()
+        .map(
+            skuId -> {
+              Sku sku =
+                  skuRepository
+                      .findById(skuId)
+                      .orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
+              Product product = sku.getProduct();
+              boolean sellable =
+                  product.getStatus() == Status.ACTIVE && sku.getStatus() == Status.ACTIVE;
+              if (!sellable) {
+                throw new IllegalStateException("SKU_NOT_SELLABLE");
+              }
+              return new CheckoutItemResponse(
+                  sku.getId(),
+                  product.getId(),
+                  sku.getCode(),
+                  product.getName(),
+                  sku.getColor(),
+                  sku.getSize(),
+                  sku.getPrice(),
+                  sku.getCurrency(),
+                  product.getVersion(),
+                  true);
+            })
+        .toList();
   }
 
   private String normalizeVariant(String value) {

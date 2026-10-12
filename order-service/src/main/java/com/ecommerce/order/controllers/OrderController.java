@@ -70,13 +70,18 @@ public class OrderController {
   }
 
   @PostMapping("/orders")
-  public CartDtos.OrderResponse createOrder(Authentication authentication) {
-    return orderResponse(orderService.createFromCart(userId(authentication)));
+  public CartDtos.OrderResponse createOrder(
+      Authentication authentication, @Valid @RequestBody CartDtos.CheckoutRequest request) {
+    return orderResponse(
+        orderService.createFromCart(
+            userId(authentication), request, "Bearer " + authentication.getCredentials()));
   }
 
   @GetMapping("/orders")
   public List<CartDtos.OrderResponse> listOrders(Authentication authentication) {
-    return orderService.listByUser(userId(authentication)).stream().map(this::orderResponse).toList();
+    return orderService.listByUser(userId(authentication)).stream()
+        .map(this::orderResponse)
+        .toList();
   }
 
   @GetMapping("/orders/{orderId}")
@@ -91,7 +96,8 @@ public class OrderController {
   }
 
   @GetMapping("/inventory/availability")
-  public List<CartDtos.InventoryAvailabilityResponse> availability(@RequestParam List<Long> skuIds) {
+  public List<CartDtos.InventoryAvailabilityResponse> availability(
+      @RequestParam List<Long> skuIds) {
     if (skuIds.size() > 100) throw new IllegalArgumentException("Chỉ được kiểm tra tối đa 100 SKU");
     if (skuIds.isEmpty() || skuIds.stream().anyMatch(id -> id == null || id <= 0)) {
       throw new IllegalArgumentException("Danh sách SKU phải chứa các ID lớn hơn 0");
@@ -151,6 +157,7 @@ public class OrderController {
         order.getCurrency(),
         order.getVersion(),
         order.getCreatedAt(),
+        order.getPaymentDueAt(),
         order.getItems().stream().map(this::orderItemResponse).toList());
   }
 

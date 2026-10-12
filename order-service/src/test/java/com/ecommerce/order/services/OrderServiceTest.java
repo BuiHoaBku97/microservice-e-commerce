@@ -3,14 +3,18 @@ package com.ecommerce.order.services;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.ecommerce.order.clients.CatalogCheckoutItem;
+import com.ecommerce.order.clients.CatalogClient;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderStatus;
 import com.ecommerce.order.repositories.OrderRepository;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,19 +29,26 @@ class OrderServiceTest {
   @Mock private CartService cartService;
   @Mock private InventoryService inventoryService;
   @Mock private OutboxEventService outboxEventService;
+  @Mock private CatalogClient catalogClient;
 
   private OrderService orderService;
 
   @BeforeEach
   void setUp() {
     orderService =
-        new OrderService(orderRepository, cartService, inventoryService, outboxEventService, 900);
+        new OrderService(
+            orderRepository, cartService, inventoryService, outboxEventService, catalogClient, 900);
   }
 
   @Test
   void createFromCart_shouldCreateOrderAndReserveInventory() {
     Cart cart = cartWithItem(10L, 2, 150_000L);
     when(cartService.getOrCreate(7L)).thenReturn(cart);
+    when(catalogClient.getCheckoutItems(any(), any()))
+        .thenReturn(
+            List.of(
+                new CatalogCheckoutItem(
+                    10L, 20L, "SKU-10", "Sản phẩm", "RED", "M", 150_000L, "VND", 1L, true)));
     when(orderRepository.save(any(Order.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -51,6 +62,39 @@ class OrderServiceTest {
     verify(inventoryService).reserve(Map.of(10L, 2));
     verify(outboxEventService).enqueueOrderCreated(any(Order.class));
     verify(cartService).clear(eq(7L), eq(cart.getVersion()));
+  }
+
+  @Test
+  void createFromCart_shouldRejectClientPriceBeforeReservingInventory() {
+    Cart cart = cartWithItem(10L, 2, 150_000L);
+    when(cartService.getOrCreate(7L)).thenReturn(cart);
+    when(catalogClient.getCheckoutItems(any(), any()))
+        .thenReturn(
+            List.of(
+                new CatalogCheckoutItem(
+                    10L, 20L, "SKU-10", "Sản phẩm", "RED", "M", 180_000L, "VND", 1L, true)));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> orderService.createFromCart(7L))
+        .isInstanceOf(com.ecommerce.order.exceptions.PriceChangedException.class);
+    verify(inventoryService, never()).reserve(any());
+    verify(orderRepository, never()).save(any());
+  }
+
+  @Test
+  void createFromCart_shouldRejectInactiveSkuBeforeReservingInventory() {
+    Cart cart = cartWithItem(10L, 2, 150_000L);
+    when(cartService.getOrCreate(7L)).thenReturn(cart);
+    when(catalogClient.getCheckoutItems(any(), any()))
+        .thenReturn(
+            List.of(
+                new CatalogCheckoutItem(
+                    10L, 20L, "SKU-10", "Sản phẩm", "RED", "M", 150_000L, "VND", 1L, false)));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> orderService.createFromCart(7L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("SKU_NOT_SELLABLE");
+    verify(inventoryService, never()).reserve(any());
+    verify(orderRepository, never()).save(any());
   }
 
   @Test

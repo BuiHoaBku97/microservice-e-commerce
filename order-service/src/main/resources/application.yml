@@ -40,6 +40,10 @@ server:
   port: 8083
 
 app:
+  clients:
+    catalog:
+      connect-timeout-ms: ${CATALOG_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${CATALOG_READ_TIMEOUT_MS:3000}
   kafka:
     topics:
       order-events: ${ORDER_EVENTS_TOPIC:ecommerce.order.events}

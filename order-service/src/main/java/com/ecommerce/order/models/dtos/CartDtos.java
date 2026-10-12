@@ -1,6 +1,7 @@
 package com.ecommerce.order.models.dtos;
 
 import com.ecommerce.order.models.entities.OrderStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -34,7 +35,17 @@ public final class CartDtos {
       String currency,
       Long version,
       Instant createdAt,
+      Instant paymentDueAt,
       List<OrderItemResponse> items) {}
 
   public record OrderItemResponse(Long skuId, Integer quantity, Long unitPrice, Long lineTotal) {}
+
+  public record CheckoutRequest(
+      @NotNull Long cartVersion,
+      @NotNull @jakarta.validation.constraints.NotEmpty List<@Valid CheckoutItem> expectedItems) {}
+
+  public record CheckoutItem(
+      @NotNull Long skuId,
+      @NotNull @Min(1) @Max(10) Integer quantity,
+      @NotNull @Min(1) Long expectedUnitPrice) {}
 }

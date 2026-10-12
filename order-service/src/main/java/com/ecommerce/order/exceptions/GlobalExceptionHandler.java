@@ -25,8 +25,26 @@ public class GlobalExceptionHandler {
   public Map<String, Object> conflict(IllegalStateException exception) {
     return Map.of(
         "code",
-        exception.getMessage().equals("VERSION_CONFLICT") ? "VERSION_CONFLICT" : "INVALID_STATE",
+        "VERSION_CONFLICT".equals(exception.getMessage())
+            ? "VERSION_CONFLICT"
+            : "CART_CHANGED".equals(exception.getMessage())
+                ? "CART_CHANGED"
+                : "SKU_NOT_SELLABLE".equals(exception.getMessage())
+                    ? "SKU_NOT_SELLABLE"
+                    : "INVALID_STATE",
         "message",
         exception.getMessage());
+  }
+
+  @ExceptionHandler(PriceChangedException.class)
+  @ResponseStatus(HttpStatus.CONFLICT)
+  public Map<String, Object> priceChanged(PriceChangedException exception) {
+    return Map.of("code", "PRICE_CHANGED", "message", exception.getMessage());
+  }
+
+  @ExceptionHandler(CatalogUnavailableException.class)
+  @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+  public Map<String, Object> catalogUnavailable(CatalogUnavailableException exception) {
+    return Map.of("code", "CATALOG_UNAVAILABLE", "message", exception.getMessage());
   }
 }
