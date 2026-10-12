@@ -44,6 +44,8 @@ server:
   port: 8083
 
 app:
+  order:
+    payment-expiry-scan-delay-ms: ${PAYMENT_EXPIRY_SCAN_DELAY_MS:30000}
   clients:
     internal-service-token: ${INTERNAL_SERVICE_TOKEN:}
     catalog:

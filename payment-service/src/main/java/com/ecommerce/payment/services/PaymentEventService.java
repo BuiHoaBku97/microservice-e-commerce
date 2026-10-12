@@ -35,7 +35,6 @@ public class PaymentEventService {
                   Map.entry("occurredAt", Instant.now()),
                   Map.entry("aggregateType", "Payment"),
                   Map.entry("aggregateId", payment.getId()),
-                  Map.entry("correlationId", String.valueOf(payment.getOrderId())),
                   Map.entry("paymentId", payment.getId()),
                   Map.entry("orderId", payment.getOrderId()),
                   Map.entry("userId", payment.getUserId()),

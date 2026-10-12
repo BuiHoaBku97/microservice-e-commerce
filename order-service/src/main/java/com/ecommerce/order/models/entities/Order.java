@@ -153,6 +153,12 @@ public class Order {
     }
   }
 
+  public void markPaymentExpired() {
+    if (status == OrderStatus.PENDING) {
+      status = OrderStatus.PAYMENT_REJECTED;
+    }
+  }
+
   public void confirm() {
     if (status == OrderStatus.PENDING) {
       status = OrderStatus.CONFIRMED;

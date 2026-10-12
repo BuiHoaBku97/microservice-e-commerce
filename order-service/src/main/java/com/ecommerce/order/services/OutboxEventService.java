@@ -68,7 +68,6 @@ public class OutboxEventService {
         Map.entry("occurredAt", java.time.Instant.now()),
         Map.entry("aggregateType", "Order"),
         Map.entry("aggregateId", order.getId()),
-        Map.entry("correlationId", String.valueOf(order.getId())),
         Map.entry("orderId", order.getId()),
         Map.entry("userId", order.getUserId()),
         Map.entry("status", order.getStatus()),

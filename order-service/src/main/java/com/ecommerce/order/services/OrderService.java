@@ -414,6 +414,27 @@ public class OrderService {
     return ordersRepository.save(order);
   }
 
+  @Transactional
+  public int expirePendingPayments(Instant now) {
+    List<Order> expired =
+        ordersRepository.findExpiredPendingOrders(
+            com.ecommerce.order.models.entities.OrderStatus.PENDING, now);
+    int expiredCount = 0;
+    for (Order candidate : expired) {
+      Order order = getForUpdate(candidate.getId());
+      if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING
+          || !order.getPaymentDueAt().isBefore(now)) {
+        continue;
+      }
+      inventoryService.release(quantities(order));
+      order.markPaymentExpired();
+      Order saved = ordersRepository.save(order);
+      outboxEventService.enqueueOrderCancelled(saved);
+      expiredCount++;
+    }
+    return expiredCount;
+  }
+
   private String validatePayment(PaymentEvent event, Order order) {
     if (event.eventId() == null || event.eventId().isBlank()) return "EVENT_ID_REQUIRED";
     if (event.paymentId() == null || event.paymentId() <= 0) return "INVALID_PAYMENT_ID";

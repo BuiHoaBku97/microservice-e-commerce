@@ -3,6 +3,8 @@ package com.ecommerce.order.repositories;
 import com.ecommerce.order.models.entities.Order;
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
+import com.ecommerce.order.models.entities.OrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
@@ -19,4 +21,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select o from Order o where o.id = :id")
   Optional<Order> findByIdForUpdate(@Param("id") Long id);
+
+  @Query("select o from Order o where o.status = :status and o.paymentDueAt < :now order by o.paymentDueAt")
+  List<Order> findExpiredPendingOrders(
+      @Param("status") OrderStatus status, @Param("now") Instant now);
 }

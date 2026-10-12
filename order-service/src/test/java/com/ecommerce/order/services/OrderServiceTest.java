@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -253,6 +254,25 @@ class OrderServiceTest {
 
     verify(inventoryService, never()).finalizeReservation(any());
     verify(paymentEventHistoryRepository, never()).save(any());
+  }
+
+  @Test
+  void expirePendingPayments_shouldReleaseInventoryAndRejectExpiredOrder() {
+    java.time.Instant now = java.time.Instant.now();
+    Order order = new Order(7L, 300_000L, "VND", now.minusSeconds(1));
+    ReflectionTestUtils.setField(order, "id", 3L);
+    order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
+    when(orderRepository.findExpiredPendingOrders(OrderStatus.PENDING, now))
+        .thenReturn(List.of(order));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(orderRepository.save(order)).thenReturn(order);
+
+    int expired = orderService.expirePendingPayments(now);
+
+    assertEquals(1, expired);
+    assertEquals(OrderStatus.PAYMENT_REJECTED, order.getStatus());
+    verify(inventoryService).release(Map.of(10L, 2));
+    verify(outboxEventService).enqueueOrderCancelled(order);
   }
 
   private OrderService orderServiceWithHistory() {
