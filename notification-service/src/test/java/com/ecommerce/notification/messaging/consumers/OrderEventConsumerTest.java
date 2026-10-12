@@ -30,7 +30,7 @@ class OrderEventConsumerTest {
   @Test
   void shouldNotifyAndAcknowledgeOrderConfirmed() {
     consumer.consume(
-        "{\"eventType\":\"OrderConfirmed\",\"orderId\":10,\"userId\":1,\"status\":\"CONFIRMED\"}",
+        "{\"eventId\":\"order-confirmed-1\",\"eventType\":\"OrderConfirmed\",\"orderId\":10,\"userId\":1,\"status\":\"CONFIRMED\"}",
         acknowledgment);
 
     verify(service).createFromEvent(any());

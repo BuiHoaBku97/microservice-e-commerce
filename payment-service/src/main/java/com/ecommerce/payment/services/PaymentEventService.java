@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Instant;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -31,6 +32,10 @@ public class PaymentEventService {
                Map.ofEntries(
                   Map.entry("eventId", UUID.randomUUID().toString()),
                   Map.entry("eventType", eventType),
+                  Map.entry("occurredAt", Instant.now()),
+                  Map.entry("aggregateType", "Payment"),
+                  Map.entry("aggregateId", payment.getId()),
+                  Map.entry("correlationId", String.valueOf(payment.getOrderId())),
                   Map.entry("paymentId", payment.getId()),
                   Map.entry("orderId", payment.getOrderId()),
                   Map.entry("userId", payment.getUserId()),

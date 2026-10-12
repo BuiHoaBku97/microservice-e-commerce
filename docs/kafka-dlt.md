@@ -37,7 +37,9 @@ Spring Kafka cung cấp header gốc về topic, partition, offset và exception
 - x-dlt-error-summary: thông báo chung tiếng Việt
 - x-dlt-failed-at: thời gian UTC
 
-failed-at được tạo lại nếu thử publish DLT lại. eventId vẫn nằm trong payload nếu event nguồn có trường này. Event hiện tại chưa có envelope/eventId đầy đủ; phần đó còn ở C1, không tự giả lập đã có chống trùng theo eventId.
+failed-at được tạo lại nếu thử publish DLT lại. C1 bổ sung event envelope phẳng cho event mới với
+`eventId`, `eventType`, `occurredAt`, `aggregateType` và `aggregateId`. DLT giữ nguyên payload nên
+eventId không bị tạo lại khi redrive. Consumer cũ vẫn đọc được các trường nghiệp vụ ở top-level.
 
 ## Kiểm tra topic và message
 
@@ -86,4 +88,3 @@ KafkaErrorHandlerTest ở cả ba service sử dụng DefaultErrorHandler và De
 - Lỗi vĩnh viễn đi thẳng DLT.
 
 Cần nghiệm thu thêm với broker/DB thật: restart consumer, broker ngừng/phục hồi, offset sau restart và replay không tác động nghiệp vụ hai lần. Docker daemon chưa chạy trong lần triển khai A4; các ví dụ vận hành chưa được thực thi.
-

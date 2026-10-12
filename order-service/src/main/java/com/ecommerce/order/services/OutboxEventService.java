@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -38,14 +39,15 @@ public class OutboxEventService {
 
   private void enqueue(String eventType, Order order) {
     try {
-      String payload = objectMapper.writeValueAsString(payload(eventType, order));
+      String eventId = UUID.randomUUID().toString();
+      String payload = objectMapper.writeValueAsString(payload(eventId, eventType, order));
       outboxEventRepository.save(new OutboxEvent("Order", order.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Không thể tạo sự kiện đơn hàng", exception);
     }
   }
 
-  private Map<String, Object> payload(String eventType, Order order) {
+  private Map<String, Object> payload(String eventId, String eventType, Order order) {
     List<Map<String, Object>> items =
         order.getItems().stream()
             .map(
@@ -60,22 +62,19 @@ public class OutboxEventService {
                         "lineTotal",
                         item.getLineTotal()))
             .toList();
-    return Map.of(
-        "eventType",
-        eventType,
-        "orderId",
-        order.getId(),
-        "userId",
-        order.getUserId(),
-        "status",
-        order.getStatus(),
-        "totalAmount",
-        order.getTotalAmount(),
-        "currency",
-        order.getCurrency(),
-        "paymentDueAt",
-        order.getPaymentDueAt(),
-        "items",
-        items);
+    return Map.ofEntries(
+        Map.entry("eventId", eventId),
+        Map.entry("eventType", eventType),
+        Map.entry("occurredAt", java.time.Instant.now()),
+        Map.entry("aggregateType", "Order"),
+        Map.entry("aggregateId", order.getId()),
+        Map.entry("correlationId", String.valueOf(order.getId())),
+        Map.entry("orderId", order.getId()),
+        Map.entry("userId", order.getUserId()),
+        Map.entry("status", order.getStatus()),
+        Map.entry("totalAmount", order.getTotalAmount()),
+        Map.entry("currency", order.getCurrency()),
+        Map.entry("paymentDueAt", order.getPaymentDueAt()),
+        Map.entry("items", items));
   }
 }

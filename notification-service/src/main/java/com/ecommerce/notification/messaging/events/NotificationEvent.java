@@ -3,6 +3,7 @@ package com.ecommerce.notification.messaging.events;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public record NotificationEvent(
+    String eventId,
     Long userId,
     String eventType,
     String title,
@@ -10,8 +11,20 @@ public record NotificationEvent(
     String referenceType,
     Long referenceId,
     String deduplicationKey) {
+  public NotificationEvent(
+      Long userId,
+      String eventType,
+      String title,
+      String message,
+      String referenceType,
+      Long referenceId,
+      String deduplicationKey) {
+    this(null, userId, eventType, title, message, referenceType, referenceId, deduplicationKey);
+  }
+
   public static NotificationEvent from(JsonNode payload) {
     String eventType = payload.path("eventType").asText();
+    String eventId = payload.hasNonNull("eventId") ? payload.get("eventId").asText() : null;
     Long userId = payload.path("userId").asLong();
     Long orderId = payload.hasNonNull("orderId") ? payload.get("orderId").asLong() : null;
     Long referenceId =
@@ -48,12 +61,13 @@ public record NotificationEvent(
       default -> throw new IllegalArgumentException("Loại sự kiện không được hỗ trợ");
     }
     return new NotificationEvent(
+        eventId,
         userId,
         eventType,
         title,
         message,
         referenceType,
         referenceId,
-        eventType + ":" + referenceId);
+        eventId == null || eventId.isBlank() ? eventType + ":" + referenceId : eventId);
   }
 }
