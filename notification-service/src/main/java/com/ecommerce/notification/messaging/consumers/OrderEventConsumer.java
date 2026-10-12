@@ -7,9 +7,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import java.util.Set;
 
 @Component
 public class OrderEventConsumer {
+  private static final Set<String> SUPPORTED_EVENTS =
+      Set.of("OrderCreated", "OrderConfirmed", "OrderCancelled");
   private final ObjectMapper objectMapper;
   private final NotificationService notificationService;
 
@@ -24,10 +27,9 @@ public class OrderEventConsumer {
   public void consume(String message, Acknowledgment acknowledgment) {
     try {
       JsonNode payload = objectMapper.readTree(message);
-      if ("OrderConfirmationRejected".equals(payload.path("eventType").asText())) {
-        // Kết quả đối soát dành cho Payment, không tạo thông báo khách hàng.
-        acknowledgment.acknowledge();
-        return;
+      String eventType = payload.path("eventType").asText();
+      if (!SUPPORTED_EVENTS.contains(eventType)) {
+        throw new IllegalArgumentException("Loại sự kiện đơn hàng chưa được hỗ trợ");
       }
       notificationService.createFromEvent(NotificationEvent.from(payload));
       acknowledgment.acknowledge();

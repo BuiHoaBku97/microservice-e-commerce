@@ -19,6 +19,9 @@ public record NotificationEvent(
             ? orderId
             : payload.hasNonNull("paymentId") ? payload.get("paymentId").asLong() : null;
     String referenceType = orderId != null ? "ORDER" : "PAYMENT";
+    if (eventType.isBlank() || userId <= 0 || referenceId == null || referenceId <= 0) {
+      throw new IllegalArgumentException("Payload sự kiện thông báo không hợp lệ");
+    }
     String title;
     String message;
     switch (eventType) {

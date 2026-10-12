@@ -28,6 +28,16 @@ class OrderEventConsumerTest {
   }
 
   @Test
+  void shouldNotifyAndAcknowledgeOrderConfirmed() {
+    consumer.consume(
+        "{\"eventType\":\"OrderConfirmed\",\"orderId\":10,\"userId\":1,\"status\":\"CONFIRMED\"}",
+        acknowledgment);
+
+    verify(service).createFromEvent(any());
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
   void shouldNotAcknowledgeWhenServiceFails() {
     doThrow(new IllegalStateException("Giao dịch thất bại"))
         .when(service).createFromEvent(any());
@@ -59,10 +69,19 @@ class OrderEventConsumerTest {
   }
 
   @Test
-  void shouldAcknowledgeKnownUnrelatedEventWithoutChangingBusinessData() {
-    consumer.consume("{\"eventType\":\"OrderConfirmationRejected\"}", acknowledgment);
-    verify(acknowledgment).acknowledge();
+  void shouldRejectDeprecatedOrderConfirmationRejectedEventWithoutAcknowledging() {
+    assertThatThrownBy(
+            () -> consumer.consume("{\"eventType\":\"OrderConfirmationRejected\"}", acknowledgment))
+        .isInstanceOf(IllegalStateException.class);
+    verifyNoInteractions(service, acknowledgment);
+  }
+
+  @Test
+  void shouldRejectOrderEventWithMissingIdentityWithoutAcknowledging() {
+    assertThatThrownBy(
+            () -> consumer.consume("{\"eventType\":\"OrderConfirmed\",\"orderId\":10}", acknowledgment))
+        .isInstanceOf(IllegalStateException.class);
     verifyNoInteractions(service);
+    verifyNoInteractions(acknowledgment);
   }
 }
-
