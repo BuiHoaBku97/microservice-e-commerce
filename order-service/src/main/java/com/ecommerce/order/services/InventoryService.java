@@ -5,18 +5,45 @@ import com.ecommerce.order.models.entities.Inventory;
 import com.ecommerce.order.repositories.InventoryRepository;
 import jakarta.transaction.Transactional;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class InventoryService {
   private final InventoryRepository inventoryRepository;
+  private final RedissonClient redissonClient;
+  private final TransactionTemplate transactionTemplate;
+  private final long lockWaitMs;
 
   public InventoryService(InventoryRepository inventoryRepository) {
     this.inventoryRepository = inventoryRepository;
+    this.redissonClient = null;
+    this.transactionTemplate = null;
+    this.lockWaitMs = 0;
+  }
+
+  @Autowired
+  public InventoryService(
+      InventoryRepository inventoryRepository,
+      RedissonClient redissonClient,
+      PlatformTransactionManager transactionManager,
+      @Value("${app.inventory.lock.wait-ms:2000}") long lockWaitMs) {
+    this.inventoryRepository = inventoryRepository;
+    this.redissonClient = redissonClient;
+    this.transactionTemplate = new TransactionTemplate(transactionManager);
+    this.lockWaitMs = lockWaitMs;
   }
 
   public List<CartDtos.InventoryAvailabilityResponse> availability(List<Long> skuIds) {
@@ -70,10 +97,14 @@ public class InventoryService {
     return inventoryRepository.save(inventory);
   }
 
-  @Transactional
   public void reserve(Map<Long, Integer> quantities) {
+    withInventoryLocks(quantities, () -> transactionTemplate.executeWithoutResult(
+                                          status -> reserveInTransaction(quantities)));
+  }
+
+  private void reserveInTransaction(Map<Long, Integer> quantities) {
     List<Inventory> inventoryList =
-        inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
+        inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().sorted().toList());
     Map<Long, Inventory> bySkuId =
         inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
     if (!bySkuId.keySet().containsAll(quantities.keySet())) {
@@ -92,10 +123,14 @@ public class InventoryService {
         });
   }
 
-  @Transactional
   public void release(Map<Long, Integer> quantities) {
+    withInventoryLocks(quantities, () -> transactionTemplate.executeWithoutResult(
+        status -> releaseInTransaction(quantities)));
+  }
+
+  private void releaseInTransaction(Map<Long, Integer> quantities) {
     List<Inventory> inventoryList =
-        inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().toList());
+        inventoryRepository.findBySkuIdInForUpdate(quantities.keySet().stream().sorted().toList());
     Map<Long, Inventory> bySkuId =
         inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
     quantities.forEach(
@@ -113,5 +148,40 @@ public class InventoryService {
   private CartDtos.InventoryAvailabilityResponse response(Long id, Inventory inventory) {
     int available = inventory == null ? 0 : inventory.getOnHand() - inventory.getReserved();
     return new CartDtos.InventoryAvailabilityResponse(id, available);
+  }
+
+  private void withInventoryLocks(Map<Long, Integer> quantities, Runnable action) {
+    if (quantities == null || quantities.isEmpty()) {
+      return;
+    }
+    if (redissonClient == null || transactionTemplate == null) {
+      throw new IllegalStateException("Khóa tồn kho chưa được cấu hình");
+    }
+    List<RLock> acquiredLocks = new ArrayList<>();
+    try {
+      quantities.keySet().stream()
+          .sorted(Comparator.naturalOrder())
+          .map(skuId -> redissonClient.getLock("inventory:sku:" + skuId))
+          .forEach(
+              lock -> {
+                try {
+                  if (!lock.tryLock(lockWaitMs, -1, TimeUnit.MILLISECONDS)) {
+                    throw new IllegalStateException("Không thể lấy khóa tồn kho trong thời gian cho phép");
+                  }
+                  acquiredLocks.add(lock);
+                } catch (InterruptedException exception) {
+                  Thread.currentThread().interrupt();
+                  throw new IllegalStateException("Đã bị gián đoạn khi chờ khóa tồn kho", exception);
+                }
+              });
+      action.run();
+    } finally {
+      for (int index = acquiredLocks.size() - 1; index >= 0; index--) {
+        RLock lock = acquiredLocks.get(index);
+        if (lock.isHeldByCurrentThread()) {
+          lock.unlock();
+        }
+      }
+    }
   }
 }
