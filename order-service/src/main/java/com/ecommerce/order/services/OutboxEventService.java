@@ -41,7 +41,8 @@ public class OutboxEventService {
     try {
       String eventId = UUID.randomUUID().toString();
       String payload = objectMapper.writeValueAsString(payload(eventId, eventType, order));
-      outboxEventRepository.save(new OutboxEvent("Order", order.getId(), eventType, payload));
+      outboxEventRepository.save(
+          new OutboxEvent(eventId, "Order", order.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Không thể tạo sự kiện đơn hàng", exception);
     }

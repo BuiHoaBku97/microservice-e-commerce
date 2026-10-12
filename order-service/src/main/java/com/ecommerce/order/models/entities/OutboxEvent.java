@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -20,6 +21,9 @@ public class OutboxEvent {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
+
+  @Column(nullable = false, unique = true, length = 100)
+  private String eventId;
 
   @Column(nullable = false, length = 80)
   private String aggregateType;
@@ -49,6 +53,12 @@ public class OutboxEvent {
   private String lastError;
 
   public OutboxEvent(String aggregateType, Long aggregateId, String eventType, String payload) {
+    this(UUID.randomUUID().toString(), aggregateType, aggregateId, eventType, payload);
+  }
+
+  public OutboxEvent(
+      String eventId, String aggregateType, Long aggregateId, String eventType, String payload) {
+    this.eventId = eventId;
     this.aggregateType = aggregateType;
     this.aggregateId = aggregateId;
     this.eventType = eventType;

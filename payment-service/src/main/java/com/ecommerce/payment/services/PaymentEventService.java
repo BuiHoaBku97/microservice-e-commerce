@@ -27,10 +27,11 @@ public class PaymentEventService {
     String eventType =
         payment.getStatus().name().equals("COMPLETED") ? "PaymentSucceeded" : "PaymentFailed";
     try {
+      String eventId = UUID.randomUUID().toString();
       String payload =
           objectMapper.writeValueAsString(
                Map.ofEntries(
-                  Map.entry("eventId", UUID.randomUUID().toString()),
+                  Map.entry("eventId", eventId),
                   Map.entry("eventType", eventType),
                   Map.entry("occurredAt", Instant.now()),
                   Map.entry("aggregateType", "Payment"),
@@ -44,7 +45,8 @@ public class PaymentEventService {
                   Map.entry("status", payment.getStatus()),
                   Map.entry("providerReference", payment.getProviderReference() == null ? "" : payment.getProviderReference()),
                   Map.entry("failureReason", payment.getFailureReason() == null ? "" : payment.getFailureReason())));
-      outboxEventRepository.save(new OutboxEvent("Payment", payment.getId(), eventType, payload));
+      outboxEventRepository.save(
+          new OutboxEvent(eventId, "Payment", payment.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Không thể tạo sự kiện thanh toán", exception);
     }
