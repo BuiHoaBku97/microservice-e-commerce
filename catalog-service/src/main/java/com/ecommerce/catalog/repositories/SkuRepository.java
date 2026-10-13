@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SkuRepository extends JpaRepository<Sku, Long> {
   boolean existsByCodeIgnoreCase(String code);
 
+  boolean existsByProductIdAndColorAndSize(Long productId, String color, String size);
+
   List<Sku> findByProductIdOrderByIdAsc(Long productId);
 
   List<Sku> findByProductIdAndStatusOrderByIdAsc(Long productId, Status status);

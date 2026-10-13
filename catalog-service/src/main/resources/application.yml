@@ -14,6 +14,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
   security:
     jwt:
       private-key-base64: MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDBq+W86lm1505TVoksAkPrXaNx5WOj/rLK/ZVLEk5zRniRyW44CHvTDKqPmlPXPsdWG9DozWn8mNdV38nCXBeg1aZ0iQxHk8HEuU0cL0trA7Dr961ZoUzBgkfGemlctQcY/yluPjHyHZb4e8Fs9iC+KQ9PPfaR+WHCTv6ybhQjjHfcg4SUSxyDWNzJs2+htg3hC7YIM1DbgAiwo7BHCsj7fvYX+7DfGqLAJN4mmgNv8pCnoHOLkw6jho4Ik0GeNx6kz5/Q55HoBl0NSbIQntR0V5TWRmxwPZ0XYAgzmmmRl9waLlL43/U6gXTLDSln4+96ktNP5oJNUiLF3F5D1dopAgMBAAECggEAL5n8gY5oNll/2uPuGy8DWppNTfU/pFM5xsLFKwp41cSAZfTIbmVHafw2/8zCxqjbfcKgelfisP8wDh9PC8Ju3E0m+IWmywD6I0wYM9E8DDWACr95kAohP36x/Yqg0vR7ph0xJbOLuyKitLhWNl3YdmTJKoTkUcSlzohz+Y8sy/+Q6210e1J9HUf/mdPXZmZMy02B2b6VGSdRbyuRCjjKMa1L3pEiDjwksmLnXTvEAtPNol9fexKUic2sv8IwljCkXdKL9V4/di/oHLsViPnBAFtCnb2E79XdCcYF1JjVwWmoDg72er+Hz0ciGnKvtrac6V9aYGHmSUfVWbqBM8V9wQKBgQDqi1lmftZ4dvry5VZStccl0jDNhmYDwgo/q12WdVfdXe4xUio/zL47R/E536MKcPFp8SaLUmdwEujrKRy40S+bv0M8GksJtK1/yq/nrQcuD16jX9RqQDQkMSjFDQ2k0JZeMBfIMVOuBHKFbd3u+Esg1j0TuY59XZErDD4ArXgSlQKBgQDTY18jF/OFeW/TnPuDG6XgVymG8AbqL/Uj4y8VuOCOw0VpnT50tI8WUBhHRVNii9El2g9VNWMPNNkI0V39kxjDEGmWggDVbqs3M+27UmA/kRYjeiFbrIcjVrANpVTaNIYDi4KapR/JGv5yvWsT48R8gjF0EbsFNC+aUInJHPd4RQKBgE0OKPnmc9mx5TJFrD2SIPJJAuWS4RMc/bb7Os0CkjJU+LtVbjH1tw3MzfCgi3UTtAyFQI+HLBqC6+jOYfRKLWTyykkFrl9q75FLas0naHN2czYjdqrNmxPE3ssWRcQ/Dxe0nyuTIRXLukAh30byZeRM3lYLoUeIpPfKltgsJYWdAoGAYAGg4ups4rEdtel1Xb1/390Wcj+vlEtFtg/ngaEe9BgB/Y66/0lg4fLDwuQbJB95AgesJ93px9kdxnH63QUafuZSQ8wW79Qqdi+3zXxms1FVcWRQvafxdAIU5pEaHo0Z4XEQoI+ZnMJH4miCT2ILthep42p+BoUiKyNd7bdOlUCgYAcA9JQXTyrtJqY1oQek0nHuH+ULJxDGkkPaz1AW+47Nuqbs+37IdPAEsiq0+CQ3XresEC5U7vrwafUXVN/le/JhLpAQVL+ClVl6em+YKRfPx8zso5FgiHK8kh9dQAAsSzQG7bxw6B0QPygtvsifwiubNMOy4FCRV7Ti2mDFUnQUg==
@@ -26,6 +30,11 @@ eureka:
 
 server:
   port: 8082
+
+app:
+  catalog:
+    default-image-url: ${CATALOG_DEFAULT_IMAGE_URL:https://res.cloudinary.com/demo/image/upload/product-placeholder.jpg}
+    cache-ttl-seconds: ${CATALOG_CACHE_TTL_SECONDS:300}
 
 security:
   internal:

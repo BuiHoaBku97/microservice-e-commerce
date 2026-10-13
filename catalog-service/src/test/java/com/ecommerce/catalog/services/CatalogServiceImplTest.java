@@ -13,13 +13,14 @@ import com.ecommerce.catalog.models.entities.Status;
 import com.ecommerce.catalog.repositories.CategoryRepository;
 import com.ecommerce.catalog.repositories.ProductRepository;
 import com.ecommerce.catalog.repositories.SkuRepository;
+import com.ecommerce.catalog.repositories.SkuPriceHistoryRepository;
 import com.ecommerce.catalog.services.impls.CatalogServiceImpl;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -28,7 +29,14 @@ class CatalogServiceImplTest {
   @Mock private CategoryRepository categoryRepository;
   @Mock private ProductRepository productRepository;
   @Mock private SkuRepository skuRepository;
-  @InjectMocks private CatalogServiceImpl catalogService;
+  @Mock private SkuPriceHistoryRepository priceHistoryRepository;
+  private CatalogServiceImpl catalogService;
+
+  @BeforeEach
+  void setUp() {
+    catalogService = new CatalogServiceImpl(categoryRepository, productRepository, skuRepository,
+        priceHistoryRepository, "https://example.test/default.jpg");
+  }
 
   @Test
   void createCategory_shouldNormalizeCodeAndSlug() {
