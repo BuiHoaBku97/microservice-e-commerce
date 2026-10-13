@@ -58,6 +58,18 @@ public record NotificationEvent(
         title = "Đơn hàng đã được xác nhận";
         message = "Đơn hàng #" + referenceId + " đã được xác nhận sau khi thanh toán.";
       }
+      case "OrderConfirmationRejected" -> {
+        title = "Thanh toán cần được kiểm tra";
+        message = "Thanh toán cho đơn hàng #" + referenceId + " chưa được chấp nhận và cần kiểm tra.";
+      }
+      case "OrderShipping" -> {
+        title = "Đơn hàng đang được giao";
+        message = "Đơn hàng #" + referenceId + " đang trên đường giao đến bạn.";
+      }
+      case "OrderCompleted" -> {
+        title = "Đơn hàng đã hoàn tất";
+        message = "Đơn hàng #" + referenceId + " đã được giao thành công.";
+      }
       default -> throw new IllegalArgumentException("Loại sự kiện không được hỗ trợ");
     }
     return new NotificationEvent(

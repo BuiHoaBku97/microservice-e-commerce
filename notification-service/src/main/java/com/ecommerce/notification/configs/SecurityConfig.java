@@ -20,6 +20,8 @@ public class SecurityConfig {
                 auth ->
                 auth.requestMatchers("/actuator/health")
                     .permitAll()
+                    .requestMatchers("/api/v1/admin/**")
+                    .hasAuthority("SCOPE_ADMIN")
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(

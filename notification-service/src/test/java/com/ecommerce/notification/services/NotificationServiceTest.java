@@ -11,6 +11,7 @@ import com.ecommerce.notification.models.entities.Notification;
 import com.ecommerce.notification.models.entities.NotificationStatus;
 import com.ecommerce.notification.messaging.events.NotificationEvent;
 import com.ecommerce.notification.repositories.NotificationRepository;
+import com.ecommerce.notification.repositories.DeliveryAttemptRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,11 +22,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
   @Mock private NotificationRepository notificationRepository;
+  @Mock private DeliveryAttemptRepository deliveryAttemptRepository;
 
   @InjectMocks private NotificationService notificationService;
 
   @Test
-  void shouldCreateSentNotification() {
+  void shouldCreatePendingNotification() {
     NotificationEvent event =
         new NotificationEvent(
             7L, "PaymentCompleted", "Thanh toán thành công", "Đơn hàng đã thanh toán", "ORDER", 10L,
@@ -37,7 +39,7 @@ class NotificationServiceTest {
 
     Notification notification = notificationService.createFromEvent(event);
 
-    assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
+    assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
     assertThat(notification.getUserId()).isEqualTo(7L);
     verify(notificationRepository).save(any(Notification.class));
   }

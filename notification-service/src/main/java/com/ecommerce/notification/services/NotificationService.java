@@ -2,17 +2,26 @@ package com.ecommerce.notification.services;
 
 import com.ecommerce.notification.models.entities.Notification;
 import com.ecommerce.notification.repositories.NotificationRepository;
+import com.ecommerce.notification.repositories.DeliveryAttemptRepository;
+import com.ecommerce.notification.models.entities.DeliveryAttempt;
+import com.ecommerce.notification.models.entities.NotificationStatus;
 import com.ecommerce.notification.messaging.events.NotificationEvent;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 public class NotificationService {
   private final NotificationRepository notificationRepository;
+  private final DeliveryAttemptRepository deliveryAttemptRepository;
 
-  public NotificationService(NotificationRepository notificationRepository) {
+  public NotificationService(
+      NotificationRepository notificationRepository,
+      DeliveryAttemptRepository deliveryAttemptRepository) {
     this.notificationRepository = notificationRepository;
+    this.deliveryAttemptRepository = deliveryAttemptRepository;
   }
 
   @Transactional
@@ -30,7 +39,6 @@ public class NotificationService {
                       event.referenceType(),
                       event.referenceId(),
                       event.deduplicationKey());
-              notification.markSent();
               return notificationRepository.save(notification);
             });
   }
@@ -48,5 +56,19 @@ public class NotificationService {
             .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thông báo"));
     notification.markRead();
     return notificationRepository.save(notification);
+  }
+
+  @Transactional
+  public Page<Notification> listForAdmin(
+      NotificationStatus status, Long orderId, Pageable pageable) {
+    return notificationRepository.findForAdmin(status, orderId, pageable);
+  }
+
+  @Transactional
+  public List<DeliveryAttempt> listAttempts(Long notificationId) {
+    if (!notificationRepository.existsById(notificationId)) {
+      throw new IllegalArgumentException("NOTIFICATION_NOT_FOUND");
+    }
+    return deliveryAttemptRepository.findByNotificationIdOrderByAttemptedAtDesc(notificationId);
   }
 }

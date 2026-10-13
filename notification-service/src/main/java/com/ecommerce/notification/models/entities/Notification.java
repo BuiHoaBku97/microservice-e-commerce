@@ -51,6 +51,14 @@ public class Notification {
 
   private Instant readAt;
 
+  @Column(nullable = false)
+  private Integer attempts = 0;
+
+  private Instant nextAttemptAt;
+
+  @Column(columnDefinition = "text")
+  private String lastError;
+
   @Column(nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -76,6 +84,16 @@ public class Notification {
 
   public void markSent() {
     status = NotificationStatus.SENT;
+    attempts++;
+    nextAttemptAt = null;
+    lastError = null;
+  }
+
+  public void markFailed(String error, Instant retryAt, int maxAttempts) {
+    attempts++;
+    lastError = error;
+    status = attempts >= maxAttempts ? NotificationStatus.FAILED : NotificationStatus.PENDING;
+    nextAttemptAt = attempts >= maxAttempts ? null : retryAt;
   }
 
   public void markRead() {

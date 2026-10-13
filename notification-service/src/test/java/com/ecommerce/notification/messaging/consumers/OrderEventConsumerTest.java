@@ -69,11 +69,12 @@ class OrderEventConsumerTest {
   }
 
   @Test
-  void shouldRejectDeprecatedOrderConfirmationRejectedEventWithoutAcknowledging() {
-    assertThatThrownBy(
-            () -> consumer.consume("{\"eventType\":\"OrderConfirmationRejected\"}", acknowledgment))
-        .isInstanceOf(IllegalStateException.class);
-    verifyNoInteractions(service, acknowledgment);
+  void shouldNotifyOrderConfirmationRejected() {
+    consumer.consume(
+        "{\"eventId\":\"rejected-1\",\"eventType\":\"OrderConfirmationRejected\",\"orderId\":10,\"userId\":1}",
+        acknowledgment);
+    verify(service).createFromEvent(any());
+    verify(acknowledgment).acknowledge();
   }
 
   @Test

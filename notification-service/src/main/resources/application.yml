@@ -38,6 +38,10 @@ server:
   port: 8085
 
 app:
+  notification:
+    max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
+    retry-seconds: ${NOTIFICATION_RETRY_SECONDS:30}
+    delivery-delay-ms: ${NOTIFICATION_DELIVERY_DELAY_MS:5000}
   kafka:
     topics:
       order-events: ${ORDER_EVENTS_TOPIC:ecommerce.order.events}

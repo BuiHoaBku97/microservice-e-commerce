@@ -12,7 +12,13 @@ import java.util.Set;
 @Component
 public class OrderEventConsumer {
   private static final Set<String> SUPPORTED_EVENTS =
-      Set.of("OrderCreated", "OrderConfirmed", "OrderCancelled");
+      Set.of(
+          "OrderCreated",
+          "OrderConfirmed",
+          "OrderConfirmationRejected",
+          "OrderShipping",
+          "OrderCompleted",
+          "OrderCancelled");
   private final ObjectMapper objectMapper;
   private final NotificationService notificationService;
 
