@@ -37,6 +37,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/internal/**")
                     .hasAuthority("SCOPE_INTERNAL_SERVICE")
+                    .requestMatchers("/api/v1/admin/**")
+                    .hasAuthority("SCOPE_ADMIN")
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(

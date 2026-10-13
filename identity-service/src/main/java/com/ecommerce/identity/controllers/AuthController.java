@@ -46,4 +46,10 @@ public class AuthController {
     return ResponseEntity.ok(
         ApiResponse.success(identityService.refresh(request), httpRequest.getRequestId()));
   }
+
+  @PostMapping("/logout")
+  ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
+    identityService.logout(request);
+    return ResponseEntity.noContent().build();
+  }
 }

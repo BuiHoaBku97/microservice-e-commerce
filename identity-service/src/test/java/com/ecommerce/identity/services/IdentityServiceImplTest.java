@@ -11,18 +11,27 @@ import com.ecommerce.identity.exceptions.AccountNotActiveException;
 import com.ecommerce.identity.exceptions.PasswordIncorrectException;
 import com.ecommerce.identity.models.dtos.requests.LoginRequest;
 import com.ecommerce.identity.models.dtos.requests.RegisterRequest;
+import com.ecommerce.identity.models.dtos.requests.RefreshTokenRequest;
+import com.ecommerce.identity.models.dtos.responses.TokenResponse;
 import com.ecommerce.identity.models.dtos.responses.UserResponse;
 import com.ecommerce.identity.models.entities.RoleName;
 import com.ecommerce.identity.models.entities.User;
+import com.ecommerce.identity.models.entities.RefreshToken;
 import com.ecommerce.identity.repositories.UserRepository;
+import com.ecommerce.identity.repositories.RefreshTokenRepository;
 import com.ecommerce.identity.services.impls.IdentityServiceImpl;
 import com.ecommerce.identity.utils.JwtTokenService;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -35,7 +44,15 @@ class IdentityServiceImplTest {
 
   @Mock private JwtTokenService jwtTokenService;
 
-  @InjectMocks private IdentityServiceImpl identityService;
+  @Mock private RefreshTokenRepository refreshTokenRepository;
+
+  private IdentityServiceImpl identityService;
+
+  @BeforeEach
+  void setUp() {
+    identityService = new IdentityServiceImpl(
+        userRepository, passwordEncoder, jwtTokenService, refreshTokenRepository, 2_592_000L);
+  }
 
   @Test
   void register_shouldCreateCustomerWithNormalizedEmail() {
@@ -91,5 +108,61 @@ class IdentityServiceImplTest {
         .isInstanceOf(AccountNotActiveException.class)
         .hasMessage("Tài khoản không ở trạng thái hoạt động");
     verify(passwordEncoder, never()).matches(any(), any());
+  }
+
+  @Test
+  void refresh_shouldRotateTokenAndRevokePreviousToken() throws Exception {
+    User user = new User("user@example.com", "encoded", "Người dùng", Set.of(RoleName.CUSTOMER));
+    String rawToken = "old-refresh-token";
+    RefreshToken current = new RefreshToken(
+        user, sha256(rawToken), Instant.now().plusSeconds(300));
+    when(refreshTokenRepository.findByTokenHashForUpdate(sha256(rawToken)))
+        .thenReturn(Optional.of(current));
+    when(jwtTokenService.issueAccessToken(user)).thenReturn("new-access-token");
+    when(jwtTokenService.accessTokenSeconds()).thenReturn(900L);
+
+    TokenResponse response = identityService.refresh(new RefreshTokenRequest(rawToken));
+
+    assertThat(response.accessToken()).isEqualTo("new-access-token");
+    assertThat(response.refreshToken()).isNotBlank().isNotEqualTo(rawToken);
+    assertThat(current.getRevokedAt()).isNotNull();
+    ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+    verify(refreshTokenRepository).save(captor.capture());
+    assertThat(current.getReplacedByHash()).isEqualTo(captor.getValue().getTokenHash());
+  }
+
+  @Test
+  void refresh_shouldRejectReplayedRotatedToken() throws Exception {
+    User user = new User("user@example.com", "encoded", "Người dùng", Set.of(RoleName.CUSTOMER));
+    String rawToken = "old-refresh-token";
+    RefreshToken current = new RefreshToken(
+        user, sha256(rawToken), Instant.now().plusSeconds(300));
+    current.revoke("replacement-hash");
+    when(refreshTokenRepository.findByTokenHashForUpdate(sha256(rawToken)))
+        .thenReturn(Optional.of(current));
+
+    assertThatThrownBy(() -> identityService.refresh(new RefreshTokenRequest(rawToken)))
+        .isInstanceOf(IllegalArgumentException.class);
+    verify(jwtTokenService, never()).issueAccessToken(any());
+  }
+
+  @Test
+  void logout_shouldBeIdempotentForAlreadyRevokedSession() throws Exception {
+    String rawToken = "refresh-token";
+    User user = new User("user@example.com", "encoded", "Người dùng", Set.of(RoleName.CUSTOMER));
+    RefreshToken token = new RefreshToken(user, sha256(rawToken), Instant.now().plusSeconds(300));
+    token.revoke(null);
+    Instant revokedAt = token.getRevokedAt();
+    when(refreshTokenRepository.findByTokenHashForUpdate(sha256(rawToken)))
+        .thenReturn(Optional.of(token));
+
+    identityService.logout(new RefreshTokenRequest(rawToken));
+
+    assertThat(token.getRevokedAt()).isEqualTo(revokedAt);
+  }
+
+  private String sha256(String value) throws Exception {
+    return HexFormat.of().formatHex(
+        MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
   }
 }

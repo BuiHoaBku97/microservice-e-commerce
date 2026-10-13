@@ -22,7 +22,7 @@ public class JwtTokenService {
     this.accessTokenSeconds = accessTokenSeconds;
   }
 
-  public TokenResponse issue(User user) {
+  public String issueAccessToken(User user) {
     Instant now = Instant.now();
     String roles = user.getRoles().stream().map(Enum::name).collect(Collectors.joining(" "));
     String accessToken =
@@ -31,6 +31,7 @@ public class JwtTokenService {
             .keyId("ecommerce-identity")
             .and()
             .issuer("ecommerce-identity")
+            .audience().add("ecommerce-api").and()
             .subject(String.valueOf(user.getId()))
             .issuedAt(java.util.Date.from(now))
             .expiration(java.util.Date.from(now.plusSeconds(accessTokenSeconds)))
@@ -39,15 +40,10 @@ public class JwtTokenService {
             .claim("scope", roles)
             .signWith(keyPair.getPrivate(), Jwts.SIG.RS256)
             .compact();
-    return new TokenResponse(accessToken, accessToken, "Bearer", accessTokenSeconds);
+    return accessToken;
   }
 
-  public TokenResponse refresh(String refreshToken) {
-    try {
-      Jwts.parser().verifyWith(keyPair.getPublic()).build().parseSignedClaims(refreshToken);
-    } catch (Exception exception) {
-      throw new IllegalArgumentException("Refresh token không hợp lệ hoặc đã hết hạn", exception);
-    }
-    throw new UnsupportedOperationException("Refresh token rotation chưa được cấu hình");
+  public long accessTokenSeconds() {
+    return accessTokenSeconds;
   }
 }

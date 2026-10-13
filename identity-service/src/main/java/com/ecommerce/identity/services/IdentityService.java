@@ -12,4 +12,6 @@ public interface IdentityService {
   TokenResponse login(LoginRequest request);
 
   TokenResponse refresh(RefreshTokenRequest request);
+
+  void logout(RefreshTokenRequest request);
 }
