@@ -162,6 +162,7 @@ services:
       PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/payment_db
       PAYMENT_DB_USERNAME: payment_user
       PAYMENT_DB_PASSWORD: payment_password
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:?PAYMENT_CALLBACK_SECRET must be set}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       postgres:
@@ -191,13 +192,22 @@ services:
     environment:
       SERVER_PORT: 8080
       EUREKA_URI: http://eureka-server:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
     depends_on:
-      - eureka-server
-      - identity-service
-      - catalog-service
-      - order-service
-      - payment-service
-      - notification-service
+      eureka-server:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
     ports:
       - "8080:8080"
 

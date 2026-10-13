@@ -10,7 +10,10 @@ import com.ecommerce.order.models.entities.OrderItem;
 import com.ecommerce.order.repositories.OrderRepository;
 import com.ecommerce.order.services.OrderService;
 import com.ecommerce.order.services.OutboxEventService;
+import com.ecommerce.payment.models.dtos.requests.PaymentCallbackRequest;
+import com.ecommerce.payment.services.PaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,6 +25,9 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.HexFormat;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -116,6 +122,7 @@ class EventFlowIntegrationTest {
         "--app.kafka.topics.payment-events=" + PAYMENT_TOPIC,
         "--app.kafka.retry.interval-ms=100",
         "--app.kafka.retry.max-retries=3",
+        "--app.payment.callback-secret=c4-test-secret",
         "--test.redis.address=redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379));
     context.getBean(KafkaListenerEndpointRegistry.class).getListenerContainers()
         .forEach(container -> ContainerTestUtils.waitForAssignment(container, 3));
@@ -142,6 +149,7 @@ class EventFlowIntegrationTest {
     orders.getBean(com.ecommerce.order.messaging.publishers.OutboxPublisher.class).publishPendingEvents();
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
         assertThat(count(payments, "SELECT count(*) FROM payments WHERE order_id=?", order.getId())).isEqualTo(1));
+    submitSuccessfulPaymentCallback(order);
     String paymentPayload = jdbc(payments).queryForObject(
         "SELECT payload FROM outbox_events WHERE payload::jsonb ->> 'orderId'=?", String.class,
         order.getId().toString());
@@ -218,7 +226,7 @@ class EventFlowIntegrationTest {
           .get(10, TimeUnit.SECONDS);
     }
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-      assertStock(order, "PAYMENT_FAILED", 10, 0);
+      assertStock(order, "CANCELLED", 10, 0);
       assertThat(count(notifications, "SELECT count(*) FROM notifications WHERE reference_id=?", order.getId()))
           .isEqualTo(1);
     });
@@ -271,7 +279,8 @@ class EventFlowIntegrationTest {
       assertStock(order, "PAYMENT_REVIEW", 10, 0);
       assertThat(count(orders, "SELECT count(*) FROM payment_event_history WHERE order_id=?", order.getId()))
           .isEqualTo(1);
-      assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=?", order.getId())).isZero();
+      assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderConfirmationRejected'",
+          order.getId())).isEqualTo(1);
     }
   }
 
@@ -282,7 +291,7 @@ class EventFlowIntegrationTest {
     PaymentEvent event = event(order, 100L);
     orders.getBean(OrderService.class).handlePaymentSucceeded(event);
     orders.getBean(OrderService.class).handlePaymentSucceeded(event);
-    assertStock(order, "PAYMENT_REJECTED", 10, 0);
+    assertStock(order, "CANCELLED", 10, 0);
     assertThat(count(orders, "SELECT count(*) FROM payment_event_history WHERE order_id=?", order.getId()))
         .isEqualTo(1);
     assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderCancelled'",
@@ -299,7 +308,7 @@ class EventFlowIntegrationTest {
       orders.getBean(OrderService.class).handlePaymentSucceeded(event);
       throw new IllegalStateException("simulate crash before commit");
     })).isInstanceOf(IllegalStateException.class);
-    assertStock(order, "PENDING", 10, 2);
+    assertStock(order, "PENDING_PAYMENT", 10, 2);
     assertThat(count(orders, "SELECT count(*) FROM payment_event_history WHERE order_id=?", order.getId())).isZero();
     assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=?", order.getId())).isZero();
     orders.getBean(OrderService.class).handlePaymentSucceeded(event);
@@ -353,6 +362,27 @@ class EventFlowIntegrationTest {
   private PaymentEvent event(Order order, long amount) {
     return new PaymentEvent(UUID.randomUUID().toString(), "PaymentSucceeded",
         order.getId() + 100000, order.getId(), amount, "VND", order.getPaymentDueAt(), null);
+  }
+
+  private void submitSuccessfulPaymentCallback(Order order) throws Exception {
+    Long paymentId = jdbc(payments).queryForObject(
+        "SELECT id FROM payments WHERE order_id=?", Long.class, order.getId());
+    var callback = new PaymentCallbackRequest(
+        "provider-event-" + order.getId(),
+        "provider-transaction-" + order.getId(),
+        paymentId,
+        order.getId(),
+        PaymentCallbackRequest.Result.SUCCESS,
+        order.getTotalAmount(),
+        order.getCurrency(),
+        Instant.now());
+    String rawBody = payments.getBean(ObjectMapper.class).writeValueAsString(callback);
+    String timestamp = Long.toString(Instant.now().getEpochSecond());
+    Mac mac = Mac.getInstance("HmacSHA256");
+    mac.init(new SecretKeySpec("c4-test-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+    String signature = HexFormat.of().formatHex(
+        mac.doFinal((timestamp + rawBody).getBytes(StandardCharsets.UTF_8)));
+    payments.getBean(PaymentService.class).callback(callback, rawBody, timestamp, signature);
   }
 
   private void assertStock(Order order, String status, int onHand, int reserved) {
