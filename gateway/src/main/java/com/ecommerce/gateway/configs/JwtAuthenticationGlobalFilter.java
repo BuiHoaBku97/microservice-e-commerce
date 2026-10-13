@@ -63,6 +63,7 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
             "FORBIDDEN",
             "B\u1ea1n kh\u00f4ng c\u00f3 quy\u1ec1n truy c\u1eadp");
       }
+      exchange.getAttributes().put("authenticatedUserId", claims.getSubject());
       return chain.filter(exchange);
     } catch (Exception exception) {
       return complete(
