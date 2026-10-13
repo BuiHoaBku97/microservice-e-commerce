@@ -47,6 +47,22 @@ public class Payment {
   @Column(length = 500)
   private String failureReason;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private FundsStatus fundsStatus = FundsStatus.NOT_RECEIVED;
+
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private OrderAcceptance orderAcceptance = OrderAcceptance.PENDING;
+
+  @Column(length = 120)
+  private String providerTransactionId;
+
+  private Instant paidAt;
+
+  @Column(length = 100)
+  private String reviewReason;
+
   @Column(nullable = false, updatable = false)
   private Instant paymentDueAt;
 
@@ -73,14 +89,49 @@ public class Payment {
   }
 
   public void complete(String providerReference) {
-    status = PaymentStatus.COMPLETED;
+    status = PaymentStatus.SUCCESS;
+    fundsStatus = FundsStatus.RECEIVED;
     this.providerReference = providerReference;
+    this.providerTransactionId = providerReference;
+    this.paidAt = Instant.now();
+    failureReason = null;
+  }
+
+  public void receive(String providerTransactionId, Instant paidAt) {
+    fundsStatus = FundsStatus.RECEIVED;
+    this.providerTransactionId = providerTransactionId;
+    this.providerReference = providerTransactionId;
+    this.paidAt = paidAt == null ? Instant.now() : paidAt;
+    status = orderAcceptance == OrderAcceptance.REJECTED
+        ? PaymentStatus.REQUIRES_REVIEW : PaymentStatus.SUCCESS;
     failureReason = null;
   }
 
   public void fail(String reason) {
+    if (fundsStatus == FundsStatus.RECEIVED) return;
     status = PaymentStatus.FAILED;
     failureReason = reason;
+  }
+
+  public void acceptOrder() {
+    orderAcceptance = OrderAcceptance.ACCEPTED;
+    if (fundsStatus == FundsStatus.RECEIVED) status = PaymentStatus.SUCCESS;
+  }
+
+  public void rejectOrder(String reason) {
+    orderAcceptance = OrderAcceptance.REJECTED;
+    reviewReason = reason;
+    if (fundsStatus == FundsStatus.RECEIVED) status = PaymentStatus.REQUIRES_REVIEW;
+  }
+
+  public void cancelFromOrder(String reason) {
+    orderAcceptance = OrderAcceptance.REJECTED;
+    if (fundsStatus == FundsStatus.RECEIVED) {
+      status = PaymentStatus.REQUIRES_REVIEW;
+      reviewReason = reason;
+    } else {
+      status = "PAYMENT_EXPIRED".equals(reason) ? PaymentStatus.EXPIRED : PaymentStatus.CANCELLED;
+    }
   }
 
   @PrePersist

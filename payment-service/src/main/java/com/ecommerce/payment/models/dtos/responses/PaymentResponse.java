@@ -1,6 +1,7 @@
 package com.ecommerce.payment.models.dtos.responses;
 
 import com.ecommerce.payment.models.entities.Payment;
+import java.time.Instant;
 
 public record PaymentResponse(
     Long id,
@@ -9,8 +10,14 @@ public record PaymentResponse(
     Long amount,
     String currency,
     String status,
+    String fundsStatus,
+    String orderAcceptance,
+    String reviewReason,
     String providerReference,
-    String failureReason) {
+    String providerTransactionId,
+    String failureReason,
+    Instant paidAt,
+    Instant paymentDueAt) {
   public static PaymentResponse from(Payment payment) {
     return new PaymentResponse(
         payment.getId(),
@@ -19,7 +26,13 @@ public record PaymentResponse(
         payment.getAmount(),
         payment.getCurrency(),
         payment.getStatus().name(),
+        payment.getFundsStatus().name(),
+        payment.getOrderAcceptance().name(),
+        payment.getReviewReason(),
         payment.getProviderReference(),
-        payment.getFailureReason());
+        payment.getProviderTransactionId(),
+        payment.getFailureReason(),
+        payment.getPaidAt(),
+        payment.getPaymentDueAt());
   }
 }

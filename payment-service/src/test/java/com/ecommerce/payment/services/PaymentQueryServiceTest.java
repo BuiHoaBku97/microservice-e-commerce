@@ -15,7 +15,10 @@ import org.junit.jupiter.api.Test;
 
 class PaymentQueryServiceTest {
   private final PaymentRepository paymentRepository = mock(PaymentRepository.class);
-  private final PaymentQueryService service = new PaymentQueryService(paymentRepository);
+  private final PaymentQueryService service = new PaymentQueryService(
+      paymentRepository,
+      org.mockito.Mockito.mock(
+          com.ecommerce.payment.repositories.PaymentStatusHistoryRepository.class));
 
   @Test
   void returnsOnlyPaymentMatchingOrderAndAuthenticatedUser() {

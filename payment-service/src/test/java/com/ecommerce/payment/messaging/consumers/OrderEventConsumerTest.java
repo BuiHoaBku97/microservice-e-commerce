@@ -60,8 +60,24 @@ class OrderEventConsumerTest {
     verifyNoInteractions(service, acknowledgment);
   }
 
+  @Test
+  void shouldUpdatePaymentWhenOrderIsConfirmed() {
+    consumer.consume(VALID_EVENT.replace("OrderCreated", "OrderConfirmed")
+        .replace("\"orderId\":10", "\"orderId\":10,\"paymentId\":20"), acknowledgment);
+    verify(service).handleOrderConfirmed(10L, 20L);
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  void shouldUpdatePaymentWhenOrderIsCancelled() {
+    consumer.consume(VALID_EVENT.replace("OrderCreated", "OrderCancelled")
+        .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"PAYMENT_EXPIRED\""), acknowledgment);
+    verify(service).handleOrderCancelled(10L, "PAYMENT_EXPIRED");
+    verify(acknowledgment).acknowledge();
+  }
+
   @ParameterizedTest
-  @ValueSource(strings = {"OrderConfirmed", "OrderCancelled", "OrderShipping", "OrderCompleted"})
+  @ValueSource(strings = {"OrderShipping", "OrderCompleted"})
   void shouldAcknowledgeKnownUnrelatedEventWithoutChangingBusinessData(String eventType) {
     consumer.consume(
         VALID_EVENT.replace("OrderCreated", eventType),

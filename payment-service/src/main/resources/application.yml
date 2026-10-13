@@ -38,6 +38,9 @@ server:
   port: 8084
 
 app:
+  payment:
+    callback-secret: ${PAYMENT_CALLBACK_SECRET:}
+    callback-window-seconds: ${PAYMENT_CALLBACK_WINDOW_SECONDS:300}
   kafka:
     topics:
       order-events: ${ORDER_EVENTS_TOPIC:ecommerce.order.events}

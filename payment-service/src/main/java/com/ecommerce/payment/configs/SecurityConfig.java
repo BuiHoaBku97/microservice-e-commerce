@@ -27,6 +27,8 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/actuator/health")
                     .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/payments/mock/callback")
+                    .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/orders/*/payment")
                     .hasAuthority("SCOPE_CUSTOMER")
                     .requestMatchers("/api/v1/admin/**")

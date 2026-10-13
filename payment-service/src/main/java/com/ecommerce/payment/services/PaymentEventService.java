@@ -25,7 +25,7 @@ public class PaymentEventService {
   @Transactional
   public void enqueuePaymentResult(Payment payment) {
     String eventType =
-        payment.getStatus().name().equals("COMPLETED") ? "PaymentSucceeded" : "PaymentFailed";
+        payment.getFundsStatus().name().equals("RECEIVED") ? "PaymentSucceeded" : "PaymentFailed";
     try {
       String eventId = UUID.randomUUID().toString();
       String payload =
@@ -42,6 +42,9 @@ public class PaymentEventService {
                   Map.entry("amount", payment.getAmount()),
                   Map.entry("currency", payment.getCurrency()),
                   Map.entry("paymentDueAt", payment.getPaymentDueAt()),
+                  Map.entry("paidAt", payment.getPaidAt() == null ? Instant.now() : payment.getPaidAt()),
+                  Map.entry("provider", "MOCK"),
+                  Map.entry("providerTransactionId", payment.getProviderTransactionId() == null ? "" : payment.getProviderTransactionId()),
                   Map.entry("status", payment.getStatus()),
                   Map.entry("providerReference", payment.getProviderReference() == null ? "" : payment.getProviderReference()),
                   Map.entry("failureReason", payment.getFailureReason() == null ? "" : payment.getFailureReason())));

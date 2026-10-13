@@ -9,6 +9,21 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+  @ExceptionHandler(SecurityException.class)
+  ResponseEntity<ApiErrorResponse> unauthenticated(
+      SecurityException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        .body(ApiErrorResponse.of(
+            "CALLBACK_UNAUTHENTICATED", exception.getMessage(), request.getRequestId()));
+  }
+
+  @ExceptionHandler(IllegalStateException.class)
+  ResponseEntity<ApiErrorResponse> conflict(
+      IllegalStateException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(ApiErrorResponse.of(exception.getMessage(), exception.getMessage(), request.getRequestId()));
+  }
+
   @ExceptionHandler(PaymentNotFoundException.class)
   ResponseEntity<ApiErrorResponse> notFound(
       PaymentNotFoundException exception, HttpServletRequest request) {
