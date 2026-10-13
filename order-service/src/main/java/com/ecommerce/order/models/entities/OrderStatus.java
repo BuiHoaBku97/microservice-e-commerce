@@ -1,12 +1,10 @@
 package com.ecommerce.order.models.entities;
 
 public enum OrderStatus {
-  PENDING,
-  PAID,
-  PAYMENT_FAILED,
+  PENDING_PAYMENT,
   PAYMENT_REVIEW,
-  PAYMENT_REJECTED,
   CONFIRMED,
+  SHIPPING,
   CANCELLED,
   COMPLETED
 }

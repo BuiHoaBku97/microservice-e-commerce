@@ -50,6 +50,9 @@ public final class CartDtos {
 
   public record OrderItemResponse(Long skuId, Integer quantity, Long unitPrice, Long lineTotal) {}
 
+  public record OrderStatusHistoryResponse(
+      Long id, OrderStatus status, String source, String reason, Instant createdAt) {}
+
   public record CheckoutRequest(
       @NotNull Long cartVersion,
       @NotNull Long addressId,

@@ -21,6 +21,8 @@ import com.ecommerce.order.models.entities.PaymentEventResult;
 import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.repositories.OrderRepository;
 import com.ecommerce.order.repositories.PaymentEventHistoryRepository;
+import com.ecommerce.order.repositories.OrderStatusHistoryRepository;
+import com.ecommerce.order.models.entities.OrderStatusHistory;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +38,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Service
 public class OrderService {
@@ -49,6 +53,7 @@ public class OrderService {
   private final IdentityClient identityClient;
   private final long paymentTimeoutSeconds;
   private final PaymentEventHistoryRepository paymentEventHistoryRepository;
+  private final OrderStatusHistoryRepository orderStatusHistoryRepository;
 
   @Autowired
   public OrderService(
@@ -59,6 +64,7 @@ public class OrderService {
       CatalogClient catalogClient,
       IdentityClient identityClient,
       PaymentEventHistoryRepository paymentEventHistoryRepository,
+      OrderStatusHistoryRepository orderStatusHistoryRepository,
       @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
     this.ordersRepository = ordersRepository;
     this.cartService = cartService;
@@ -67,6 +73,7 @@ public class OrderService {
     this.catalogClient = catalogClient;
     this.identityClient = identityClient;
     this.paymentEventHistoryRepository = paymentEventHistoryRepository;
+    this.orderStatusHistoryRepository = orderStatusHistoryRepository;
     if (paymentTimeoutSeconds <= 0) {
       throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
     }
@@ -89,7 +96,21 @@ public class OrderService {
         catalogClient,
         identityClient,
         null,
+        null,
         paymentTimeoutSeconds);
+  }
+
+  public OrderService(
+      OrderRepository ordersRepository,
+      CartService cartService,
+      InventoryService inventoryService,
+      OutboxEventService outboxEventService,
+      CatalogClient catalogClient,
+      IdentityClient identityClient,
+      PaymentEventHistoryRepository paymentEventHistoryRepository,
+      long paymentTimeoutSeconds) {
+    this(ordersRepository, cartService, inventoryService, outboxEventService, catalogClient,
+        identityClient, paymentEventHistoryRepository, null, paymentTimeoutSeconds);
   }
 
   @Transactional
@@ -275,6 +296,7 @@ public class OrderService {
                         catalogBySku.get(item.getSkuId()).unitPrice())));
     cartService.clear(userId, cart.getVersion());
     Order saved = ordersRepository.save(order);
+    recordStatus(saved, "CHECKOUT", null);
     outboxEventService.enqueueOrderCreated(saved);
     return saved;
   }
@@ -337,7 +359,12 @@ public class OrderService {
 
   @Transactional
   public Order cancel(Long userId, Long orderId) {
-    Order order = getByUser(userId, orderId);
+    Order owned = getByUser(userId, orderId);
+    Order order = getForUpdate(owned.getId());
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CANCELLED) return order;
+    if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
+      throw new IllegalStateException("INVALID_STATE_TRANSITION");
+    }
     Map<Long, Integer> quantities =
         order.getItems().stream()
             .collect(
@@ -347,27 +374,12 @@ public class OrderService {
                     Integer::sum,
                     LinkedHashMap::new));
     inventoryService.release(quantities);
-    order.cancel();
+    if (!order.getPaymentDueAt().isAfter(Instant.now())) order.markPaymentExpired();
+    else order.cancel();
     Order saved = ordersRepository.save(order);
+    recordStatus(saved, "CUSTOMER_CANCEL", saved.getCancellationReason());
     outboxEventService.enqueueOrderCancelled(saved);
     return saved;
-  }
-
-  @Transactional
-  public Order handlePaymentCompleted(Long orderId) {
-    Order order = get(orderId);
-    order.markPaid();
-    return ordersRepository.save(order);
-  }
-
-  @Transactional
-  public Order handlePaymentFailed(Long orderId) {
-    Order order = get(orderId);
-    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING) {
-      inventoryService.release(quantities(order));
-      order.markPaymentFailed();
-    }
-    return ordersRepository.save(order);
   }
 
   @Transactional
@@ -382,12 +394,13 @@ public class OrderService {
       return ordersRepository.save(order);
     }
     inventoryService.finalizeReservation(quantities(order));
-    order.confirm();
+    order.confirm(event.paymentId());
     PaymentEventHistory history =
         new PaymentEventHistory(
             event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.ACCEPTED, "accepted");
     paymentEventHistoryRepository.save(history);
     Order saved = ordersRepository.save(order);
+    recordStatus(saved, "PAYMENT_SUCCEEDED", null);
     outboxEventService.enqueueOrderConfirmed(saved);
     return saved;
   }
@@ -403,7 +416,7 @@ public class OrderService {
       rejectPayment(order, event, invalidReason);
       return ordersRepository.save(order);
     }
-    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING) {
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
       inventoryService.release(quantities(order));
       order.markPaymentFailed();
     }
@@ -411,24 +424,30 @@ public class OrderService {
         new PaymentEventHistory(
             event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.FAILED,
             event.failureReason() == null ? "payment_failed" : event.failureReason()));
-    return ordersRepository.save(order);
+    Order saved = ordersRepository.save(order);
+    if (saved.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CANCELLED) {
+      recordStatus(saved, "PAYMENT_FAILED", saved.getCancellationReason());
+      outboxEventService.enqueueOrderCancelled(saved);
+    }
+    return saved;
   }
 
   @Transactional
   public int expirePendingPayments(Instant now) {
     List<Order> expired =
         ordersRepository.findExpiredPendingOrders(
-            com.ecommerce.order.models.entities.OrderStatus.PENDING, now);
+            com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT, now);
     int expiredCount = 0;
     for (Order candidate : expired) {
       Order order = getForUpdate(candidate.getId());
-      if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING
-          || !order.getPaymentDueAt().isBefore(now)) {
+      if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT
+          || order.getPaymentDueAt().isAfter(now)) {
         continue;
       }
       inventoryService.release(quantities(order));
       order.markPaymentExpired();
       Order saved = ordersRepository.save(order);
+      recordStatus(saved, "PAYMENT_EXPIRY", saved.getCancellationReason());
       outboxEventService.enqueueOrderCancelled(saved);
       expiredCount++;
     }
@@ -444,8 +463,8 @@ public class OrderService {
     if (!Objects.equals(event.amount(), order.getTotalAmount())) return "PAYMENT_AMOUNT_MISMATCH";
     if (!Objects.equals(event.currency(), order.getCurrency())) return "PAYMENT_CURRENCY_MISMATCH";
     if (!Objects.equals(event.paymentDueAt(), order.getPaymentDueAt())) return "PAYMENT_DUE_AT_MISMATCH";
-    if (order.getPaymentDueAt().isBefore(Instant.now())) return "PAYMENT_EXPIRED";
-    if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING) {
+    if (!order.getPaymentDueAt().isAfter(Instant.now())) return "PAYMENT_EXPIRED";
+    if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
       return "ORDER_NOT_PENDING";
     }
     return null;
@@ -458,19 +477,47 @@ public class OrderService {
   }
 
   private void rejectPayment(Order order, PaymentEvent event, String reason) {
-    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING) {
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
       inventoryService.release(quantities(order));
       order.markPaymentReview();
+      recordStatus(order, "PAYMENT_REJECTED", reason);
     }
     paymentEventHistoryRepository.save(
         new PaymentEventHistory(
             event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.REVIEW, reason));
+    outboxEventService.enqueueOrderConfirmationRejected(order, event.paymentId(), rejectionReason(reason));
   }
 
-  private Order get(Long orderId) {
-    return ordersRepository
-        .findById(orderId)
-        .orElseThrow(() -> new OrderNotFoundException(orderId));
+  private String rejectionReason(String reason) {
+    return switch (reason) {
+      case "PAYMENT_EXPIRED" -> "PAYMENT_EXPIRED";
+      case "ORDER_NOT_PENDING" -> "ORDER_CANCELLED";
+      case "PAYMENT_AMOUNT_MISMATCH", "PAYMENT_CURRENCY_MISMATCH", "PAYMENT_DUE_AT_MISMATCH" ->
+          "PAYMENT_MISMATCH";
+      default -> "PAYMENT_MISMATCH";
+    };
+  }
+
+  @Transactional
+  public Order ship(Long orderId) {
+    Order order = getForUpdate(orderId);
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.SHIPPING) return order;
+    order.ship();
+    Order saved = ordersRepository.save(order);
+    recordStatus(saved, "ADMIN_SHIP", null);
+    outboxEventService.enqueueOrderShipping(saved);
+    return saved;
+  }
+
+  @Transactional
+  public Order complete(Long orderId) {
+    Order order = getForUpdate(orderId);
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.COMPLETED) return order;
+    order.complete();
+    Order saved = ordersRepository.save(order);
+    recordStatus(saved, "ADMIN_COMPLETE", null);
+    outboxEventService.enqueueOrderCompleted(saved);
+    return saved;
   }
 
   private Order getForUpdate(Long orderId) {
@@ -488,4 +535,46 @@ public class OrderService {
             Collectors.toMap(
                 OrderItem::getSkuId, OrderItem::getQuantity, Integer::sum, LinkedHashMap::new));
   }
+
+  @Transactional
+  public List<OrderStatusHistory> historyByUser(Long userId, Long orderId) {
+    getByUser(userId, orderId);
+    return orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
+  }
+
+  @Transactional
+  public List<OrderStatusHistory> historyForAdmin(Long orderId) {
+    if (!ordersRepository.existsById(orderId)) throw new OrderNotFoundException(orderId);
+    return orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
+  }
+
+  @Transactional
+  public Page<Order> listForAdmin(
+      Long userId, com.ecommerce.order.models.entities.OrderStatus status,
+      Instant from, Instant to, Pageable pageable) {
+    return ordersRepository.findForAdmin(userId, status, from, to, pageable);
+  }
+
+  @Transactional
+  public Order getForAdmin(Long orderId) {
+    return ordersRepository.findById(orderId)
+        .orElseThrow(() -> new OrderNotFoundException(orderId));
+  }
+
+  @Transactional
+  public OrderReport report(Instant from, Instant to) {
+    Map<String, Long> countByStatus = new LinkedHashMap<>();
+    ordersRepository.countByStatus(from, to)
+        .forEach(row -> countByStatus.put(((com.ecommerce.order.models.entities.OrderStatus) row[0]).name(),
+            (Long) row[1]));
+    return new OrderReport(countByStatus, ordersRepository.completedOrderValue(from, to));
+  }
+
+  private void recordStatus(Order order, String source, String reason) {
+    if (orderStatusHistoryRepository != null) {
+      orderStatusHistoryRepository.save(new OrderStatusHistory(order, source, reason));
+    }
+  }
+
+  public record OrderReport(Map<String, Long> countByStatus, long completedOrderValue) {}
 }

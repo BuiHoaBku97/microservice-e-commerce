@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class OutboxPublisher {
@@ -35,9 +36,9 @@ public class OutboxPublisher {
   }
 
   @Scheduled(fixedDelayString = "${app.outbox.publish-delay-ms:5000}")
+  @Transactional
   public void publishPendingEvents() {
-    List<OutboxEvent> pending =
-        outboxEventRepository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
+    List<OutboxEvent> pending = outboxEventRepository.claimPendingBatch();
     pending.forEach(this::publish);
   }
 

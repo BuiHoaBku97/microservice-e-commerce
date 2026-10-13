@@ -22,6 +22,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import java.time.Instant;
+import com.ecommerce.order.models.entities.OrderStatus;
+import com.ecommerce.order.models.entities.OrderStatusHistory;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -102,10 +107,56 @@ public class OrderController {
     return orderResponse(orderService.getByUser(userId(authentication), orderId));
   }
 
-  @PatchMapping("/orders/{orderId}/cancel")
+  @GetMapping("/orders/{orderId}/history")
+  public List<CartDtos.OrderStatusHistoryResponse> orderHistory(
+      Authentication authentication, @PathVariable Long orderId) {
+    return orderService.historyByUser(userId(authentication), orderId).stream()
+        .map(this::historyResponse).toList();
+  }
+
+  @PostMapping("/orders/{orderId}/cancel")
   public CartDtos.OrderResponse cancelOrder(
       Authentication authentication, @PathVariable Long orderId) {
     return orderResponse(orderService.cancel(userId(authentication), orderId));
+  }
+
+  @PostMapping("/admin/orders/{orderId}/ship")
+  public CartDtos.OrderResponse ship(@PathVariable Long orderId) {
+    return orderResponse(orderService.ship(orderId));
+  }
+
+  @PostMapping("/admin/orders/{orderId}/complete")
+  public CartDtos.OrderResponse complete(@PathVariable Long orderId) {
+    return orderResponse(orderService.complete(orderId));
+  }
+
+  @GetMapping("/admin/orders")
+  public Page<CartDtos.OrderResponse> adminOrders(
+      @RequestParam(required = false) Long userId,
+      @RequestParam(required = false) OrderStatus status,
+      @RequestParam(required = false) Instant from,
+      @RequestParam(required = false) Instant to,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return orderService.listForAdmin(userId, status, from, to,
+        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))).map(this::orderResponse);
+  }
+
+  @GetMapping("/admin/orders/{orderId}")
+  public CartDtos.OrderResponse adminOrder(@PathVariable Long orderId) {
+    return orderResponse(orderService.getForAdmin(orderId));
+  }
+
+  @GetMapping("/admin/orders/{orderId}/history")
+  public List<CartDtos.OrderStatusHistoryResponse> adminOrderHistory(@PathVariable Long orderId) {
+    return orderService.historyForAdmin(orderId).stream().map(this::historyResponse).toList();
+  }
+
+  @GetMapping("/admin/reports/orders")
+  public OrderService.OrderReport orderReport(
+      @RequestParam(required = false) Instant from,
+      @RequestParam(required = false) Instant to) {
+    return orderService.report(from, to);
   }
 
   @GetMapping("/inventory/availability")
@@ -187,5 +238,11 @@ public class OrderController {
   private CartDtos.OrderItemResponse orderItemResponse(OrderItem item) {
     return new CartDtos.OrderItemResponse(
         item.getSkuId(), item.getQuantity(), item.getUnitPrice(), item.getLineTotal());
+  }
+
+  private CartDtos.OrderStatusHistoryResponse historyResponse(OrderStatusHistory history) {
+    return new CartDtos.OrderStatusHistoryResponse(
+        history.getId(), history.getStatus(), history.getSource(), history.getReason(),
+        history.getCreatedAt());
   }
 }

@@ -154,8 +154,10 @@ class OrderServiceTest {
   @Test
   void cancel_shouldReleaseInventoryAndChangeStatus() {
     Order order = new Order(7L, 300_000L, "VND");
+    ReflectionTestUtils.setField(order, "id", 3L);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdAndUserId(3L, 7L)).thenReturn(Optional.of(order));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(orderRepository.save(order)).thenReturn(order);
 
     Order cancelled = orderService.cancel(7L, 3L);
@@ -167,28 +169,21 @@ class OrderServiceTest {
   }
 
   @Test
-  void handlePaymentCompleted_shouldMarkOrderAsPaid() {
-    Order order = new Order(7L, 300_000L, "VND");
-    when(orderRepository.findById(3L)).thenReturn(Optional.of(order));
-    when(orderRepository.save(order)).thenReturn(order);
-
-    Order paid = orderService.handlePaymentCompleted(3L);
-
-    assertEquals(OrderStatus.PAID, paid.getStatus());
-    verify(orderRepository).save(order);
-  }
-
-  @Test
   void handlePaymentFailed_shouldReleaseInventoryOnlyOnce() {
-    Order order = new Order(7L, 300_000L, "VND");
+    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
-    when(orderRepository.findById(3L)).thenReturn(Optional.of(order));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(paymentEventHistoryRepository.existsByEventId("evt-failed")).thenReturn(false);
+    when(paymentEventHistoryRepository.existsByPaymentId(24L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
-    Order failed = orderService.handlePaymentFailed(3L);
+    Order failed = orderServiceWithHistory().handlePaymentFailed(
+        new PaymentEvent("evt-failed", "PaymentFailed", 24L, 3L, 300_000L, "VND",
+            order.getPaymentDueAt(), "provider_declined"));
 
-    assertEquals(OrderStatus.PAYMENT_FAILED, failed.getStatus());
+    assertEquals(OrderStatus.CANCELLED, failed.getStatus());
     verify(inventoryService).release(Map.of(10L, 2));
+    verify(outboxEventService).enqueueOrderCancelled(order);
   }
 
   @Test
@@ -262,7 +257,7 @@ class OrderServiceTest {
     Order order = new Order(7L, 300_000L, "VND", now.minusSeconds(1));
     ReflectionTestUtils.setField(order, "id", 3L);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
-    when(orderRepository.findExpiredPendingOrders(OrderStatus.PENDING, now))
+    when(orderRepository.findExpiredPendingOrders(OrderStatus.PENDING_PAYMENT, now))
         .thenReturn(List.of(order));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(orderRepository.save(order)).thenReturn(order);
@@ -270,7 +265,7 @@ class OrderServiceTest {
     int expired = orderService.expirePendingPayments(now);
 
     assertEquals(1, expired);
-    assertEquals(OrderStatus.PAYMENT_REJECTED, order.getStatus());
+    assertEquals(OrderStatus.CANCELLED, order.getStatus());
     verify(inventoryService).release(Map.of(10L, 2));
     verify(outboxEventService).enqueueOrderCancelled(order);
   }

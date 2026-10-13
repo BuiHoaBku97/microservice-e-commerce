@@ -35,7 +35,7 @@ public class Order {
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
-  private OrderStatus status = OrderStatus.PENDING;
+  private OrderStatus status = OrderStatus.PENDING_PAYMENT;
 
   @Column(nullable = false)
   private Long totalAmount;
@@ -55,6 +55,18 @@ public class Order {
 
   @Column(nullable = false)
   private Instant updatedAt;
+
+  @Column(name = "accepted_payment_id")
+  private Long acceptedPaymentId;
+
+  @Column(name = "cancellation_reason", length = 50)
+  private String cancellationReason;
+
+  @Column(name = "shipping_at")
+  private Instant shippingAt;
+
+  @Column(name = "completed_at")
+  private Instant completedAt;
 
   @Column(name = "idempotency_key", length = 100)
   private String idempotencyKey;
@@ -129,40 +141,52 @@ public class Order {
   }
 
   public void cancel() {
-    if (status != OrderStatus.PENDING) {
+    if (status != OrderStatus.PENDING_PAYMENT) {
       throw new IllegalStateException("ORDER_CANNOT_BE_CANCELLED");
     }
     status = OrderStatus.CANCELLED;
-  }
-
-  public void markPaid() {
-    if (status == OrderStatus.PENDING) {
-      status = OrderStatus.PAID;
-    }
+    cancellationReason = "CUSTOMER_CANCELLED";
   }
 
   public void markPaymentFailed() {
-    if (status == OrderStatus.PENDING) {
-      status = OrderStatus.PAYMENT_FAILED;
+    if (status == OrderStatus.PENDING_PAYMENT) {
+      status = OrderStatus.CANCELLED;
+      cancellationReason = "PAYMENT_FAILED";
     }
   }
 
   public void markPaymentReview() {
-    if (status == OrderStatus.PENDING) {
+    if (status == OrderStatus.PENDING_PAYMENT) {
       status = OrderStatus.PAYMENT_REVIEW;
     }
   }
 
   public void markPaymentExpired() {
-    if (status == OrderStatus.PENDING) {
-      status = OrderStatus.PAYMENT_REJECTED;
+    if (status == OrderStatus.PENDING_PAYMENT) {
+      status = OrderStatus.CANCELLED;
+      cancellationReason = "PAYMENT_EXPIRED";
     }
   }
 
-  public void confirm() {
-    if (status == OrderStatus.PENDING) {
+  public void confirm(Long paymentId) {
+    if (status == OrderStatus.PENDING_PAYMENT) {
       status = OrderStatus.CONFIRMED;
+      acceptedPaymentId = paymentId;
     }
+  }
+
+  public void ship() {
+    if (status == OrderStatus.SHIPPING) return;
+    if (status != OrderStatus.CONFIRMED) throw new IllegalStateException("INVALID_STATE_TRANSITION");
+    status = OrderStatus.SHIPPING;
+    shippingAt = Instant.now();
+  }
+
+  public void complete() {
+    if (status == OrderStatus.COMPLETED) return;
+    if (status != OrderStatus.SHIPPING) throw new IllegalStateException("INVALID_STATE_TRANSITION");
+    status = OrderStatus.COMPLETED;
+    completedAt = Instant.now();
   }
 
   @PrePersist

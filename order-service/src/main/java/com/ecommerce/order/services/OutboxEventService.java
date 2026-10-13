@@ -37,10 +37,35 @@ public class OutboxEventService {
     enqueue("OrderConfirmed", order);
   }
 
+  @Transactional
+  public void enqueueOrderShipping(Order order) {
+    enqueue("OrderShipping", order);
+  }
+
+  @Transactional
+  public void enqueueOrderCompleted(Order order) {
+    enqueue("OrderCompleted", order);
+  }
+
+  @Transactional
+  public void enqueueOrderConfirmationRejected(Order order, Long paymentId, String reason) {
+    enqueue("OrderConfirmationRejected", order, Map.of(
+        "paymentId", paymentId,
+        "reason", reason,
+        "currentOrderStatus", order.getStatus(),
+        "rejectedAt", java.time.Instant.now()));
+  }
+
   private void enqueue(String eventType, Order order) {
+    enqueue(eventType, order, Map.of());
+  }
+
+  private void enqueue(String eventType, Order order, Map<String, Object> additions) {
     try {
       String eventId = UUID.randomUUID().toString();
-      String payload = objectMapper.writeValueAsString(payload(eventId, eventType, order));
+      Map<String, Object> eventPayload = new java.util.LinkedHashMap<>(payload(eventId, eventType, order));
+      eventPayload.putAll(additions);
+      String payload = objectMapper.writeValueAsString(eventPayload);
       outboxEventRepository.save(
           new OutboxEvent(eventId, "Order", order.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {
@@ -75,6 +100,8 @@ public class OutboxEventService {
         Map.entry("totalAmount", order.getTotalAmount()),
         Map.entry("currency", order.getCurrency()),
         Map.entry("paymentDueAt", order.getPaymentDueAt()),
+        Map.entry("paymentId", order.getAcceptedPaymentId() == null ? 0L : order.getAcceptedPaymentId()),
+        Map.entry("reason", order.getCancellationReason() == null ? "" : order.getCancellationReason()),
         Map.entry("items", items));
   }
 }
