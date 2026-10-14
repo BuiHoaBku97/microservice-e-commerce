@@ -6,7 +6,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.*;
 
-@Document(indexName = "catalog-products-v1", createIndex = true)
+@Document(indexName = "catalog-products", createIndex = false)
 @Setting(settingPath = "elasticsearch/catalog-settings.json")
 @Getter
 @Setter

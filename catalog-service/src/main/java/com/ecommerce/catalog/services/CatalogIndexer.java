@@ -2,7 +2,7 @@ package com.ecommerce.catalog.services;
 
 import com.ecommerce.catalog.models.entities.*;
 import com.ecommerce.catalog.repositories.*;
-import com.ecommerce.catalog.search.*;
+import com.ecommerce.catalog.search.CatalogProductDocument;
 import java.text.Normalizer;
 import java.util.*;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,42 +14,54 @@ public class CatalogIndexer {
   private final CatalogOutboxRepository catalogOutboxRepository;
   private final ProductRepository productRepository;
   private final SkuRepository skuRepository;
-  private final CatalogProductSearchRepository productSearchRepository;
+  private final CatalogReindexJobRepository catalogReindexJobRepository;
+  private final CatalogIndexManager indexManager;
 
   public CatalogIndexer(
       CatalogOutboxRepository catalogOutboxRepository,
       ProductRepository productRepository,
       SkuRepository skuRepository,
-      CatalogProductSearchRepository productSearchRepository) {
+      CatalogReindexJobRepository catalogReindexJobRepository,
+      CatalogIndexManager indexManager) {
     this.catalogOutboxRepository = catalogOutboxRepository;
     this.productRepository = productRepository;
     this.skuRepository = skuRepository;
-    this.productSearchRepository = productSearchRepository;
+    this.catalogReindexJobRepository = catalogReindexJobRepository;
+    this.indexManager = indexManager;
   }
 
   @Scheduled(fixedDelayString = "${app.catalog.index-delay-ms:3000}")
   @Transactional
   public void indexPending() {
+    indexManager.ensureServingIndex();
     for (CatalogOutboxEvent event : catalogOutboxRepository.claimBatch())
       try {
         index(event);
         event.complete();
-      } catch (Exception ex) {
-        event.fail(ex.getMessage());
+      } catch (Exception exception) {
+        event.fail(exception.getMessage());
       }
   }
 
   public void index(CatalogOutboxEvent event) {
     Product product = productRepository.findById(event.getProductId()).orElse(null);
-    if (product == null || product.getStatus() != Status.ACTIVE) {
-      productSearchRepository.deleteById(event.getProductId());
-      return;
+    List<String> targetIndices = new ArrayList<>();
+    targetIndices.add(CatalogIndexManager.ALIAS);
+    catalogReindexJobRepository
+        .findFirstByStatusInOrderByCreatedAtAsc(
+            List.of(CatalogReindexJob.Status.PENDING, CatalogReindexJob.Status.RUNNING))
+        .map(CatalogReindexJob::getTargetIndex)
+        .ifPresent(targetIndices::add);
+    for (String targetIndex : targetIndices) {
+      if (product == null || product.getStatus() != Status.ACTIVE)
+        indexManager.delete(event.getProductId(), targetIndex);
+      else
+        indexManager.saveIfNewer(
+            document(
+                product,
+                skuRepository.findByProductIdAndStatusOrderByIdAsc(product.getId(), Status.ACTIVE)),
+            targetIndex);
     }
-    CatalogProductDocument current = productSearchRepository.findById(product.getId()).orElse(null);
-    if (current != null && current.getProductVersion() > event.getProductVersion()) return;
-    productSearchRepository.save(
-        document(
-            product, skuRepository.findByProductIdAndStatusOrderByIdAsc(product.getId(), Status.ACTIVE)));
   }
 
   public CatalogProductDocument document(Product product, List<Sku> skuRows) {
@@ -62,8 +74,8 @@ public class CatalogIndexer {
         product.getDescription(),
         product.getCategory().getId(),
         product.getImageUrls().isEmpty() ? null : product.getImageUrls().getFirst(),
-        skuRows.stream().map(Sku::getColor).filter(v -> !v.isBlank()).distinct().toList(),
-        skuRows.stream().map(Sku::getSize).filter(v -> !v.isBlank()).distinct().toList(),
+        skuRows.stream().map(Sku::getColor).filter(color -> !color.isBlank()).distinct().toList(),
+        skuRows.stream().map(Sku::getSize).filter(size -> !size.isBlank()).distinct().toList(),
         minimumPrice,
         currency,
         product.getSearchVersion(),
@@ -75,7 +87,7 @@ public class CatalogIndexer {
     return value == null
         ? ""
         : Normalizer.normalize(value, Normalizer.Form.NFD)
-            .replaceAll("\\product{M}+", "")
+            .replaceAll("\\p{M}+", "")
             .replace('đ', 'd')
             .replace('Đ', 'D')
             .toLowerCase(Locale.ROOT);

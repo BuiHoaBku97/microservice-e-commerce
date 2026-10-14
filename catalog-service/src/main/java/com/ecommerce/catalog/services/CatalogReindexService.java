@@ -2,7 +2,6 @@ package com.ecommerce.catalog.services;
 
 import com.ecommerce.catalog.models.entities.*;
 import com.ecommerce.catalog.repositories.*;
-import com.ecommerce.catalog.search.CatalogProductSearchRepository;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -15,41 +14,44 @@ public class CatalogReindexService {
   private final CatalogReindexJobRepository catalogReindexJobRepository;
   private final ProductRepository productRepository;
   private final SkuRepository skuRepository;
-  private final CatalogProductSearchRepository productSearchRepository;
-  private final CatalogIndexer indexer;
+  private final CatalogIndexManager indexManager;
+  private final CatalogIndexer catalogIndexer;
 
   public CatalogReindexService(
       CatalogReindexJobRepository catalogReindexJobRepository,
       ProductRepository productRepository,
       SkuRepository skuRepository,
-      CatalogProductSearchRepository productSearchRepository,
-      CatalogIndexer indexer) {
+      CatalogIndexManager indexManager,
+      CatalogIndexer catalogIndexer) {
     this.catalogReindexJobRepository = catalogReindexJobRepository;
     this.productRepository = productRepository;
     this.skuRepository = skuRepository;
-    this.productSearchRepository = productSearchRepository;
-    this.indexer = indexer;
+    this.indexManager = indexManager;
+    this.catalogIndexer = catalogIndexer;
   }
 
   @Transactional
   public CatalogReindexJob request(Long requestedByUserId) {
     try {
-      return catalogReindexJobRepository.saveAndFlush(new CatalogReindexJob(requestedByUserId, productRepository.count()));
-    } catch (DataIntegrityViolationException ex) {
-      throw new IllegalStateException("REINDEX_ALREADY_RUNNING", ex);
+      return catalogReindexJobRepository.saveAndFlush(
+          new CatalogReindexJob(requestedByUserId, productRepository.count()));
+    } catch (DataIntegrityViolationException exception) {
+      throw new IllegalStateException("REINDEX_ALREADY_RUNNING", exception);
     }
   }
 
   @Transactional(readOnly = true)
   public CatalogReindexJob get(Long id) {
-    return catalogReindexJobRepository.findById(id)
+    return catalogReindexJobRepository
+        .findById(id)
         .orElseThrow(() -> new IllegalArgumentException("REINDEX_JOB_NOT_FOUND"));
   }
 
   @Scheduled(fixedDelayString = "${app.catalog.reindex-delay-ms:2000}")
   @Transactional
   public void run() {
-    catalogReindexJobRepository.findFirstByStatusInOrderByCreatedAtAsc(
+    catalogReindexJobRepository
+        .findFirstByStatusInOrderByCreatedAtAsc(
             List.of(CatalogReindexJob.Status.PENDING, CatalogReindexJob.Status.RUNNING))
         .ifPresent(this::process);
   }
@@ -57,24 +59,37 @@ public class CatalogReindexService {
   private void process(CatalogReindexJob job) {
     try {
       job.start();
-      List<Product> batch =
-          productRepository.findByIdGreaterThanOrderByIdAsc(job.getCheckpoint(), PageRequest.of(0, 100));
-      for (Product product : batch) {
+      indexManager.createIndex(job.getTargetIndex());
+      List<Product> productBatch =
+          productRepository.findByIdGreaterThanOrderByIdAsc(
+              job.getCheckpoint(), PageRequest.of(0, 100));
+      for (Product product : productBatch) {
         try {
           if (product.getStatus() == Status.ACTIVE)
-            productSearchRepository.save(
-                indexer.document(
+            indexManager.saveIfNewer(
+                catalogIndexer.document(
                     product,
-                    skuRepository.findByProductIdAndStatusOrderByIdAsc(product.getId(), Status.ACTIVE)));
-          else productSearchRepository.deleteById(product.getId());
+                    skuRepository.findByProductIdAndStatusOrderByIdAsc(
+                        product.getId(), Status.ACTIVE)),
+                job.getTargetIndex());
+          else {
+            indexManager.delete(product.getId(), job.getTargetIndex());
+          }
           job.progress(product.getId());
-        } catch (Exception ex) {
-          job.failItem(ex.getMessage());
+        } catch (Exception exception) {
+          job.failItem(exception.getMessage());
         }
       }
-      if (batch.size() < 100) job.complete();
-    } catch (Exception ex) {
-      job.fail(ex.getMessage());
+      if (productBatch.size() < 100) {
+        if (job.getFailedCount() > 0) {
+          job.complete();
+        } else {
+          indexManager.switchAlias(job.getAliasName(), job.getTargetIndex());
+          job.complete();
+        }
+      }
+    } catch (Exception exception) {
+      job.fail(exception.getMessage());
     }
   }
 }
