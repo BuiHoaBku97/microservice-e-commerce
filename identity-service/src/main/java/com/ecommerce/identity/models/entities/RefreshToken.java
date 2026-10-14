@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -42,10 +43,22 @@ public class RefreshToken {
   @Column(name = "replaced_by_hash", length = 64)
   private String replacedByHash;
 
+  @Column(name = "session_id", nullable = false)
+  private UUID sessionId;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "replaced_by_id")
+  private RefreshToken replacedBy;
+
   public RefreshToken(User user, String tokenHash, Instant expiresAt) {
+    this(user, tokenHash, expiresAt, UUID.randomUUID());
+  }
+
+  public RefreshToken(User user, String tokenHash, Instant expiresAt, UUID sessionId) {
     this.user = user;
     this.tokenHash = tokenHash;
     this.expiresAt = expiresAt;
+    this.sessionId = sessionId;
     this.createdAt = Instant.now();
   }
 
@@ -58,5 +71,10 @@ public class RefreshToken {
       revokedAt = Instant.now();
       replacedByHash = replacementHash;
     }
+  }
+
+  public void replaceWith(RefreshToken replacement) {
+    revoke(replacement.getTokenHash());
+    replacedBy = replacement;
   }
 }

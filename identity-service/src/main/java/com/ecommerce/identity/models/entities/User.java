@@ -102,4 +102,8 @@ public class User {
   public void unlock() {
     this.status = UserStatus.ACTIVE;
   }
+
+  public void grantRole(RoleName role) {
+    roles.add(role);
+  }
 }

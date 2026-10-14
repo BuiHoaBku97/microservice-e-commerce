@@ -18,6 +18,12 @@ security:
   service-jwt:
     public-key-base64: ${SERVICE_JWT_PUBLIC_KEY_BASE64}
     issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
+app:
+  admin-bootstrap:
+    enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+    full-name: ${ADMIN_FULL_NAME:System Administrator}
 eureka:
   client:
     service-url: {defaultZone: "${EUREKA_URI:http://localhost:8761/eureka/}"}

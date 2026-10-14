@@ -7,15 +7,14 @@ import com.ecommerce.identity.models.dtos.requests.RefreshTokenRequest;
 import com.ecommerce.identity.models.dtos.requests.RegisterRequest;
 import com.ecommerce.identity.models.dtos.responses.TokenResponse;
 import com.ecommerce.identity.models.dtos.responses.UserResponse;
-import com.ecommerce.identity.models.entities.RoleName;
 import com.ecommerce.identity.models.entities.RefreshToken;
+import com.ecommerce.identity.models.entities.RoleName;
 import com.ecommerce.identity.models.entities.User;
 import com.ecommerce.identity.models.entities.UserStatus;
-import com.ecommerce.identity.repositories.UserRepository;
 import com.ecommerce.identity.repositories.RefreshTokenRepository;
+import com.ecommerce.identity.repositories.UserRepository;
 import com.ecommerce.identity.services.IdentityService;
 import com.ecommerce.identity.utils.JwtTokenService;
-import java.util.Set;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -23,6 +22,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -56,7 +56,9 @@ public class IdentityServiceImpl implements IdentityService {
   @Transactional
   public UserResponse register(RegisterRequest request) {
     String email = normalizeEmail(request.email());
-    if (userRepository.existsByEmail(email)) throw new IllegalStateException("EMAIL_EXISTS");
+    if (userRepository.existsByEmail(email)) {
+      throw new IllegalStateException("EMAIL_EXISTS");
+    }
     try {
       User user =
           new User(
@@ -89,39 +91,55 @@ public class IdentityServiceImpl implements IdentityService {
   @Override
   @Transactional
   public TokenResponse refresh(RefreshTokenRequest request) {
-    String currentHash = hash(request.refreshToken());
-    RefreshToken current =
+    String currentRefreshTokenHash = hash(request.refreshToken());
+    RefreshToken currentRefreshToken =
         refreshTokenRepository
-            .findByTokenHashForUpdate(currentHash)
-            .orElseThrow(() -> new IllegalArgumentException("Refresh token không hợp lệ hoặc đã hết hạn"));
+            .findByTokenHashForUpdate(currentRefreshTokenHash)
+            .orElseThrow(
+                () -> new IllegalArgumentException("Refresh token không hợp lệ hoặc đã hết hạn"));
     Instant now = Instant.now();
-    if (!current.isUsableAt(now)) {
+    if (!currentRefreshToken.isUsableAt(now)) {
       throw new IllegalArgumentException("Refresh token không hợp lệ hoặc đã hết hạn");
     }
-    if (current.getUser().getStatus() != UserStatus.ACTIVE) {
+    if (currentRefreshToken.getUser().getStatus() != UserStatus.ACTIVE) {
       throw new AccountNotActiveException("Tài khoản không ở trạng thái hoạt động");
     }
-    String raw = newRefreshToken();
-    String replacementHash = hash(raw);
-    current.revoke(replacementHash);
-    refreshTokenRepository.save(new RefreshToken(
-        current.getUser(), replacementHash, now.plusSeconds(refreshTokenSeconds)));
-    return response(current.getUser(), raw);
+    String rawRefreshToken = newRefreshToken();
+    String replacementRefreshTokenHash = hash(rawRefreshToken);
+    RefreshToken replacementRefreshToken =
+        new RefreshToken(
+            currentRefreshToken.getUser(),
+            replacementRefreshTokenHash,
+            now.plusSeconds(refreshTokenSeconds),
+            currentRefreshToken.getSessionId());
+    RefreshToken savedReplacementRefreshToken =
+        refreshTokenRepository.save(replacementRefreshToken);
+    currentRefreshToken.replaceWith(
+        savedReplacementRefreshToken == null
+            ? replacementRefreshToken
+            : savedReplacementRefreshToken);
+    return response(currentRefreshToken.getUser(), rawRefreshToken);
   }
 
   @Override
   @Transactional
   public void logout(RefreshTokenRequest request) {
-    RefreshToken token = refreshTokenRepository.findByTokenHashForUpdate(hash(request.refreshToken()))
-        .orElseThrow(() -> new IllegalArgumentException("Refresh token không hợp lệ"));
-    token.revoke(null);
+    RefreshToken refreshToken =
+        refreshTokenRepository.findByTokenHashForUpdate(hash(request.refreshToken())).orElse(null);
+    if (refreshToken == null) {
+      return;
+    }
+    refreshTokenRepository
+        .findActiveBySessionIdForUpdate(refreshToken.getSessionId())
+        .forEach(activeRefreshToken -> activeRefreshToken.revoke(null));
   }
 
   private TokenResponse issueSession(User user) {
-    String raw = newRefreshToken();
+    String rawRefreshToken = newRefreshToken();
     refreshTokenRepository.save(
-        new RefreshToken(user, hash(raw), Instant.now().plusSeconds(refreshTokenSeconds)));
-    return response(user, raw);
+        new RefreshToken(
+            user, hash(rawRefreshToken), Instant.now().plusSeconds(refreshTokenSeconds)));
+    return response(user, rawRefreshToken);
   }
 
   private TokenResponse response(User user, String refreshToken) {
@@ -140,8 +158,9 @@ public class IdentityServiceImpl implements IdentityService {
 
   private String hash(String token) {
     try {
-      return HexFormat.of().formatHex(
-          MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));
+      return HexFormat.of()
+          .formatHex(
+              MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("Không thể băm refresh token", exception);
     }

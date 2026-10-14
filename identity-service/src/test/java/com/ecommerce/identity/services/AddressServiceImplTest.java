@@ -29,6 +29,19 @@ class AddressServiceImplTest {
   }
 
   @Test
+  void listShouldRejectLockedUser() {
+    AddressRepository addresses = mock(AddressRepository.class);
+    UserRepository users = mock(UserRepository.class);
+    User user = new User("user@example.com", "hash", "User", java.util.Set.of());
+    user.lock();
+    when(users.findById(7L)).thenReturn(Optional.of(user));
+
+    assertThatThrownBy(() -> new AddressServiceImpl(addresses, users).list(7L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("ACCOUNT_NOT_ACTIVE");
+  }
+
+  @Test
   void checkoutContextShouldReturnOwnedAddressSnapshotForActiveUser() {
     AddressRepository addresses = mock(AddressRepository.class);
     UserRepository users = mock(UserRepository.class);
@@ -36,7 +49,8 @@ class AddressServiceImplTest {
     org.springframework.test.util.ReflectionTestUtils.setField(user, "id", 7L);
     when(users.findById(7L)).thenReturn(Optional.of(user));
     Address address =
-        new Address(7L, "Nguyễn Văn A", "0900000000", "1 Đường A", "Phường 1", "Quận 1", "TP HCM", true);
+        new Address(
+            7L, "Nguyễn Văn A", "0900000000", "1 Đường A", "Phường 1", "Quận 1", "TP HCM", true);
     org.springframework.test.util.ReflectionTestUtils.setField(address, "id", 1L);
     when(addresses.findByIdAndUserId(1L, 7L)).thenReturn(Optional.of(address));
 

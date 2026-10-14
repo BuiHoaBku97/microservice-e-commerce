@@ -26,6 +26,7 @@ public class AddressServiceImpl implements AddressService {
   @Override
   @Transactional(readOnly = true)
   public List<AddressResponse> list(Long userId) {
+    ensureActive(userId);
     return addressRepository.findByUserIdOrderByDefaultAddressDescIdAsc(userId).stream()
         .map(AddressResponse::from)
         .toList();
@@ -36,9 +37,16 @@ public class AddressServiceImpl implements AddressService {
   public AddressResponse create(Long userId, AddressRequest request) {
     ensureActive(userId);
     List<Address> addresses = addressRepository.findByUserIdForUpdate(userId);
-    Address address = new Address(userId, request.recipientName(), request.recipientPhone(),
-        request.addressLine(), request.ward(), request.district(), request.province(),
-        request.defaultAddress() || addresses.isEmpty());
+    Address address =
+        new Address(
+            userId,
+            request.recipientName(),
+            request.recipientPhone(),
+            request.addressLine(),
+            request.ward(),
+            request.district(),
+            request.province(),
+            request.defaultAddress() || addresses.isEmpty());
     if (address.isDefaultAddress()) {
       addresses.forEach(item -> item.setDefaultAddress(false));
     }
@@ -51,10 +59,18 @@ public class AddressServiceImpl implements AddressService {
     ensureActive(userId);
     Address address = getOwned(userId, addressId);
     if (request.defaultAddress()) {
-      addressRepository.findByUserIdForUpdate(userId).forEach(item -> item.setDefaultAddress(false));
+      addressRepository
+          .findByUserIdForUpdate(userId)
+          .forEach(item -> item.setDefaultAddress(false));
     }
-    address.update(request.recipientName(), request.recipientPhone(), request.addressLine(),
-        request.ward(), request.district(), request.province(), request.defaultAddress());
+    address.update(
+        request.recipientName(),
+        request.recipientPhone(),
+        request.addressLine(),
+        request.ward(),
+        request.district(),
+        request.province(),
+        request.defaultAddress());
     return AddressResponse.from(addressRepository.save(address));
   }
 
@@ -65,7 +81,8 @@ public class AddressServiceImpl implements AddressService {
     Address address = getOwned(userId, addressId);
     addressRepository.delete(address);
     if (address.isDefaultAddress()) {
-      addressRepository.findByUserIdForUpdate(userId).stream().findFirst()
+      addressRepository.findByUserIdForUpdate(userId).stream()
+          .findFirst()
           .ifPresent(item -> item.setDefaultAddress(true));
     }
   }
@@ -99,7 +116,10 @@ public class AddressServiceImpl implements AddressService {
   }
 
   private User ensureActive(Long userId) {
-    User user = userRepository.findById(userId).orElseThrow(() -> new IllegalArgumentException("USER_NOT_FOUND"));
+    User user =
+        userRepository
+            .findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("USER_NOT_FOUND"));
     if (user.getStatus() != UserStatus.ACTIVE) {
       throw new IllegalStateException("ACCOUNT_NOT_ACTIVE");
     }
@@ -107,7 +127,8 @@ public class AddressServiceImpl implements AddressService {
   }
 
   private Address getOwned(Long userId, Long addressId) {
-    return addressRepository.findByIdAndUserId(addressId, userId)
+    return addressRepository
+        .findByIdAndUserId(addressId, userId)
         .orElseThrow(() -> new IllegalArgumentException("ADDRESS_NOT_FOUND"));
   }
 }

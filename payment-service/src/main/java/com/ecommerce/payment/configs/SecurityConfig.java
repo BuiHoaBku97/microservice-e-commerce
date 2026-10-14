@@ -18,7 +18,10 @@ public class SecurityConfig {
 
   @Bean
   SecurityFilterChain securityFilterChain(
-      HttpSecurity http, JwtAuthenticationFilter jwtFilter, ObjectMapper objectMapper)
+      HttpSecurity http,
+      JwtAuthenticationFilter jwtFilter,
+      ActiveAccountFilter activeAccountFilter,
+      ObjectMapper objectMapper)
       throws Exception {
     return http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(
@@ -64,6 +67,7 @@ public class SecurityConfig {
             jwtFilter,
             org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
                 .class)
+        .addFilterAfter(activeAccountFilter, JwtAuthenticationFilter.class)
         .build();
   }
 }

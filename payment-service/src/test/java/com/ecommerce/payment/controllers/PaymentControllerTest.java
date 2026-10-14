@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ecommerce.payment.configs.ActiveAccountFilter;
 import com.ecommerce.payment.configs.JwtAuthenticationFilter;
 import com.ecommerce.payment.configs.SecurityConfig;
 import com.ecommerce.payment.exceptions.PaymentNotFoundException;
@@ -20,6 +21,7 @@ import java.security.KeyPairGenerator;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -35,6 +37,24 @@ class PaymentControllerTest {
   private static final KeyPair KEY_PAIR = createKeyPair();
   @Autowired private MockMvc mockMvc;
   @MockitoBean private PaymentQueryService paymentQueryService;
+  @MockitoBean private ActiveAccountFilter activeAccountFilter;
+
+  @BeforeEach
+  void allowActiveAccount() throws Exception {
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              jakarta.servlet.ServletRequest request = invocation.getArgument(0);
+              jakarta.servlet.ServletResponse response = invocation.getArgument(1);
+              jakarta.servlet.FilterChain chain = invocation.getArgument(2);
+              chain.doFilter(request, response);
+              return null;
+            })
+        .when(activeAccountFilter)
+        .doFilter(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+  }
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry registry) {

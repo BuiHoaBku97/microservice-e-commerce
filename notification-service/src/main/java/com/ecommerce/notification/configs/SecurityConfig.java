@@ -11,13 +11,14 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter)
+  SecurityFilterChain securityFilterChain(
+      HttpSecurity http, JwtAuthenticationFilter jwtFilter, ActiveAccountFilter activeAccountFilter)
       throws Exception {
     return http.csrf(csrf -> csrf.disable())
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
-                auth ->
+            auth ->
                 auth.requestMatchers("/actuator/health")
                     .permitAll()
                     .requestMatchers("/api/v1/admin/**")
@@ -30,6 +31,7 @@ public class SecurityConfig {
             jwtFilter,
             org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
                 .class)
+        .addFilterAfter(activeAccountFilter, JwtAuthenticationFilter.class)
         .build();
   }
 }

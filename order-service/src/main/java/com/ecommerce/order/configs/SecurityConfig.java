@@ -13,9 +13,12 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtFilter)
+  SecurityFilterChain securityFilterChain(
+      HttpSecurity http,
+      JwtAuthenticationFilter jwtFilter,
+      org.springframework.beans.factory.ObjectProvider<ActiveAccountFilter> activeAccountFilter)
       throws Exception {
-    return http.csrf(csrf -> csrf.disable())
+    http.csrf(csrf -> csrf.disable())
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
@@ -33,7 +36,11 @@ public class SecurityConfig {
         .addFilterBefore(
             jwtFilter,
             org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
-                .class)
-        .build();
+                .class);
+    ActiveAccountFilter filter = activeAccountFilter.getIfAvailable();
+    if (filter != null) {
+      http.addFilterAfter(filter, JwtAuthenticationFilter.class);
+    }
+    return http.build();
   }
 }
