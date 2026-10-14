@@ -39,6 +39,15 @@ public class GlobalExceptionHandler {
               new ApiResponse<>(
                   code, "Tài khoản không ở trạng thái hoạt động", null, request.getRequestId()));
     }
+    if ("LAST_ACTIVE_ADMIN".equals(code)) {
+      return ResponseEntity.status(HttpStatus.CONFLICT)
+          .body(
+              new ApiResponse<>(
+                  code,
+                  "Không thể khóa quản trị viên đang hoạt động cuối cùng",
+                  null,
+                  request.getRequestId()));
+    }
     String message =
         "EMAIL_EXISTS".equals(code) ? "Email đã được sử dụng" : "Trạng thái yêu cầu không hợp lệ";
     return ResponseEntity.status(HttpStatus.CONFLICT)

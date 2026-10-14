@@ -5,6 +5,7 @@ import com.ecommerce.identity.models.dtos.requests.ChangeUserStatusRequest;
 import com.ecommerce.identity.models.dtos.requests.UpdateProfileRequest;
 import com.ecommerce.identity.models.dtos.responses.UserResponse;
 import com.ecommerce.identity.models.entities.AccountStatusHistory;
+import com.ecommerce.identity.models.entities.RoleName;
 import com.ecommerce.identity.models.entities.User;
 import com.ecommerce.identity.models.entities.UserStatus;
 import com.ecommerce.identity.repositories.AccountStatusHistoryRepository;
@@ -55,11 +56,16 @@ public class UserService {
 
   @Transactional
   public UserResponse lock(Long id, ChangeUserStatusRequest request) {
+    userRepository.acquireActiveAdminLock();
     User user = find(id);
     if (user.getStatus() == UserStatus.LOCKED) {
       return toResponse(user);
     }
     requireVersion(user, request.version());
+    if (user.getRoles().contains(RoleName.ADMIN)
+        && userRepository.countByRoleAndStatus(RoleName.ADMIN, UserStatus.ACTIVE) <= 1) {
+      throw new IllegalStateException("LAST_ACTIVE_ADMIN");
+    }
     UserStatus previous = user.getStatus();
     user.lock();
     User saved = userRepository.save(user);

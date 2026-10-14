@@ -1,6 +1,7 @@
 package com.ecommerce.identity.repositories;
 
 import com.ecommerce.identity.models.entities.User;
+import com.ecommerce.identity.models.entities.RoleName;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import com.ecommerce.identity.models.entities.UserStatus;
@@ -13,6 +14,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
   Optional<User> findByEmail(String email);
 
   boolean existsByEmail(String email);
+
+  @Query(
+      """
+      select count(user) from User user join user.roles role
+      where role = :role and user.status = :status
+      """)
+  long countByRoleAndStatus(
+      @Param("role") RoleName role, @Param("status") UserStatus status);
+
+  @Query(value = "select pg_advisory_xact_lock(116262024)", nativeQuery = true)
+  Object acquireActiveAdminLock();
 
   @Query("""
       select user from User user
