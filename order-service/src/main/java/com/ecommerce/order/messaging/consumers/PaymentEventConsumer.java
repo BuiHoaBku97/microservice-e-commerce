@@ -2,20 +2,31 @@ package com.ecommerce.order.messaging.consumers;
 
 import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.services.OrderService;
+import com.ecommerce.order.services.ProcessedEventService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PaymentEventConsumer {
   private final ObjectMapper objectMapper;
   private final OrderService orderService;
+  private final ProcessedEventService processedEventService;
 
   public PaymentEventConsumer(ObjectMapper objectMapper, OrderService orderService) {
+    this(objectMapper, orderService, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public PaymentEventConsumer(
+      ObjectMapper objectMapper,
+      OrderService orderService,
+      ProcessedEventService processedEventService) {
     this.objectMapper = objectMapper;
     this.orderService = orderService;
+    this.processedEventService = processedEventService;
   }
 
   @KafkaListener(
@@ -26,16 +37,26 @@ public class PaymentEventConsumer {
       JsonNode payload = objectMapper.readTree(message);
       PaymentEvent event = PaymentEvent.from(payload);
       validateEnvelope(payload, event);
-      if ("PaymentSucceeded".equals(event.eventType())) {
-        orderService.handlePaymentSucceeded(event);
-      } else if ("PaymentFailed".equals(event.eventType())) {
-        orderService.handlePaymentFailed(event);
+      Runnable action = () -> handle(event);
+      if (processedEventService == null) {
+        action.run();
       } else {
-        throw new IllegalArgumentException("Loại sự kiện thanh toán chưa được hỗ trợ");
+        processedEventService.process(
+            "order-payment-events", event.eventId(), event.eventType(), action);
       }
       acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Không thể xử lý sự kiện thanh toán", exception);
+    }
+  }
+
+  private void handle(PaymentEvent event) {
+    if ("PaymentSucceeded".equals(event.eventType())) {
+      orderService.handlePaymentSucceeded(event);
+    } else if ("PaymentFailed".equals(event.eventType())) {
+      orderService.handlePaymentFailed(event);
+    } else {
+      throw new IllegalArgumentException("Loại sự kiện thanh toán chưa được hỗ trợ");
     }
   }
 

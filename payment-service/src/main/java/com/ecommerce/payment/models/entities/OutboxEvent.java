@@ -48,6 +48,9 @@ public class OutboxEvent {
   private Instant createdAt;
 
   private Instant publishedAt;
+  private Instant claimedUntil;
+  private Instant nextAttemptAt;
+  private Instant updatedAt;
 
   @Column(columnDefinition = "text")
   private String lastError;
@@ -64,16 +67,40 @@ public class OutboxEvent {
     this.eventType = eventType;
     this.payload = payload;
     this.createdAt = Instant.now();
+    this.updatedAt = this.createdAt;
+    this.nextAttemptAt = this.createdAt;
   }
 
   public void markPublished() {
     status = OutboxStatus.PUBLISHED;
     publishedAt = Instant.now();
     lastError = null;
+    claimedUntil = null;
+    updatedAt = Instant.now();
   }
 
   public void markFailed(String error) {
     attempts++;
     lastError = error;
+    claimedUntil = null;
+    updatedAt = Instant.now();
+    if (attempts >= 8) {
+      status = OutboxStatus.FAILED;
+    } else {
+      status = OutboxStatus.PENDING;
+      nextAttemptAt = Instant.now().plusSeconds(Math.min(300, 1L << Math.min(attempts, 8)));
+    }
+  }
+
+  public void replay() {
+    if (status != OutboxStatus.FAILED) {
+      throw new IllegalStateException("OUTBOX_NOT_FAILED");
+    }
+    status = OutboxStatus.PENDING;
+    attempts = 0;
+    lastError = null;
+    claimedUntil = null;
+    nextAttemptAt = Instant.now();
+    updatedAt = Instant.now();
   }
 }

@@ -9,6 +9,20 @@ import org.springframework.data.jpa.repository.Query;
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> {
   List<OutboxEvent> findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus status);
 
-  @Query(value = "SELECT * FROM outbox_events WHERE status='PENDING' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 50", nativeQuery = true)
+  @Query(
+      value =
+          """
+          WITH candidates AS (
+            SELECT id FROM outbox_events
+            WHERE (status='PENDING' AND next_attempt_at <= now())
+               OR (status='PROCESSING' AND claimed_until < now())
+            ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 50
+          )
+          UPDATE outbox_events o SET status='PROCESSING', claimed_until=now() + interval '30 seconds',
+            updated_at=now() FROM candidates c WHERE o.id=c.id RETURNING o.*
+          """,
+      nativeQuery = true)
   List<OutboxEvent> claimPendingBatch();
+
+  List<OutboxEvent> findTop100ByStatusOrderByCreatedAtAsc(OutboxStatus status);
 }

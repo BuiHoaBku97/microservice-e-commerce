@@ -1,14 +1,14 @@
 package com.ecommerce.payment.services;
 
-import com.ecommerce.payment.models.entities.Payment;
 import com.ecommerce.payment.models.entities.OutboxEvent;
+import com.ecommerce.payment.models.entities.Payment;
 import com.ecommerce.payment.repositories.OutboxEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-import java.time.Instant;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -30,24 +30,35 @@ public class PaymentEventService {
       String eventId = UUID.randomUUID().toString();
       String payload =
           objectMapper.writeValueAsString(
-               Map.ofEntries(
+              Map.ofEntries(
                   Map.entry("eventId", eventId),
                   Map.entry("eventType", eventType),
                   Map.entry("occurredAt", Instant.now()),
                   Map.entry("aggregateType", "Payment"),
                   Map.entry("aggregateId", payment.getId()),
+                  Map.entry("aggregateVersion", payment.getVersion()),
+                  Map.entry("schemaVersion", 1),
                   Map.entry("paymentId", payment.getId()),
                   Map.entry("orderId", payment.getOrderId()),
                   Map.entry("userId", payment.getUserId()),
                   Map.entry("amount", payment.getAmount()),
                   Map.entry("currency", payment.getCurrency()),
                   Map.entry("paymentDueAt", payment.getPaymentDueAt()),
-                  Map.entry("paidAt", payment.getPaidAt() == null ? Instant.now() : payment.getPaidAt()),
+                  Map.entry(
+                      "paidAt", payment.getPaidAt() == null ? Instant.now() : payment.getPaidAt()),
                   Map.entry("provider", "MOCK"),
-                  Map.entry("providerTransactionId", payment.getProviderTransactionId() == null ? "" : payment.getProviderTransactionId()),
+                  Map.entry(
+                      "providerTransactionId",
+                      payment.getProviderTransactionId() == null
+                          ? ""
+                          : payment.getProviderTransactionId()),
                   Map.entry("status", payment.getStatus()),
-                  Map.entry("providerReference", payment.getProviderReference() == null ? "" : payment.getProviderReference()),
-                  Map.entry("failureReason", payment.getFailureReason() == null ? "" : payment.getFailureReason())));
+                  Map.entry(
+                      "providerReference",
+                      payment.getProviderReference() == null ? "" : payment.getProviderReference()),
+                  Map.entry(
+                      "failureReason",
+                      payment.getFailureReason() == null ? "" : payment.getFailureReason())));
       outboxEventRepository.save(
           new OutboxEvent(eventId, "Payment", payment.getId(), eventType, payload));
     } catch (JsonProcessingException exception) {

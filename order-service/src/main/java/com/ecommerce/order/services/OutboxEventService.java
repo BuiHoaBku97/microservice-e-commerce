@@ -49,11 +49,18 @@ public class OutboxEventService {
 
   @Transactional
   public void enqueueOrderConfirmationRejected(Order order, Long paymentId, String reason) {
-    enqueue("OrderConfirmationRejected", order, Map.of(
-        "paymentId", paymentId,
-        "reason", reason,
-        "currentOrderStatus", order.getStatus(),
-        "rejectedAt", java.time.Instant.now()));
+    enqueue(
+        "OrderConfirmationRejected",
+        order,
+        Map.of(
+            "paymentId",
+            paymentId,
+            "reason",
+            reason,
+            "currentOrderStatus",
+            order.getStatus(),
+            "rejectedAt",
+            java.time.Instant.now()));
   }
 
   private void enqueue(String eventType, Order order) {
@@ -63,7 +70,8 @@ public class OutboxEventService {
   private void enqueue(String eventType, Order order, Map<String, Object> additions) {
     try {
       String eventId = UUID.randomUUID().toString();
-      Map<String, Object> eventPayload = new java.util.LinkedHashMap<>(payload(eventId, eventType, order));
+      Map<String, Object> eventPayload =
+          new java.util.LinkedHashMap<>(payload(eventId, eventType, order));
       eventPayload.putAll(additions);
       String payload = objectMapper.writeValueAsString(eventPayload);
       outboxEventRepository.save(
@@ -74,7 +82,7 @@ public class OutboxEventService {
   }
 
   private Map<String, Object> payload(String eventId, String eventType, Order order) {
-    List<Map<String, Object>> items =
+    List<Map<String, Object>> orderItems =
         order.getItems().stream()
             .map(
                 item ->
@@ -94,14 +102,18 @@ public class OutboxEventService {
         Map.entry("occurredAt", java.time.Instant.now()),
         Map.entry("aggregateType", "Order"),
         Map.entry("aggregateId", order.getId()),
+        Map.entry("aggregateVersion", order.getVersion()),
+        Map.entry("schemaVersion", 1),
         Map.entry("orderId", order.getId()),
         Map.entry("userId", order.getUserId()),
         Map.entry("status", order.getStatus()),
         Map.entry("totalAmount", order.getTotalAmount()),
         Map.entry("currency", order.getCurrency()),
         Map.entry("paymentDueAt", order.getPaymentDueAt()),
-        Map.entry("paymentId", order.getAcceptedPaymentId() == null ? 0L : order.getAcceptedPaymentId()),
-        Map.entry("reason", order.getCancellationReason() == null ? "" : order.getCancellationReason()),
-        Map.entry("items", items));
+        Map.entry(
+            "paymentId", order.getAcceptedPaymentId() == null ? 0L : order.getAcceptedPaymentId()),
+        Map.entry(
+            "reason", order.getCancellationReason() == null ? "" : order.getCancellationReason()),
+        Map.entry("items", orderItems));
   }
 }
