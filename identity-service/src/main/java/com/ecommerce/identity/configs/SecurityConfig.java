@@ -39,11 +39,14 @@ public class SecurityConfig {
                     .hasAuthority("SCOPE_INTERNAL_SERVICE")
                     .requestMatchers("/api/v1/admin/**")
                     .hasAuthority("SCOPE_ADMIN")
+                    .requestMatchers("/api/v1/users/**")
+                    .hasAuthority("SCOPE_CUSTOMER")
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(
             jwtFilter,
-            org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)
+            org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+                .class)
         .addFilterAfter(internalServiceTokenFilter, JwtAuthenticationFilter.class)
         .build();
   }

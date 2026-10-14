@@ -82,6 +82,11 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
     if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
       throw new IllegalArgumentException("JWT kh\u00f4ng h\u1ee3p l\u1ec7");
     }
+    if (!"ecommerce-identity".equals(claims.getIssuer())
+        || claims.getAudience() == null
+        || !claims.getAudience().contains("ecommerce-api")) {
+      throw new IllegalArgumentException("JWT issuer or audience is invalid");
+    }
     return claims;
   }
 

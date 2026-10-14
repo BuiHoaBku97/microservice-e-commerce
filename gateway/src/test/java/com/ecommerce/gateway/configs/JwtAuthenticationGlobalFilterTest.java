@@ -58,8 +58,8 @@ class JwtAuthenticationGlobalFilterTest {
   }
 
   @Test
-  void rejectsUserOnAdminRoute() {
-    var exchange = exchange(HttpMethod.POST, "/api/v1/admin/products", token("USER"));
+  void rejectsCustomerOnAdminRoute() {
+    var exchange = exchange(HttpMethod.POST, "/api/v1/admin/products", token("CUSTOMER"));
     AtomicBoolean chainCalled = new AtomicBoolean();
 
     filter.filter(exchange, next(chainCalled)).block();
@@ -69,15 +69,56 @@ class JwtAuthenticationGlobalFilterTest {
   }
 
   @Test
-  void allowsAuthenticatedUserOnProtectedRoute() {
+  void allowsCustomerOnCustomerRoute() {
     var exchange = exchange(HttpMethod.GET, "/api/v1/orders");
     AtomicBoolean chainCalled = new AtomicBoolean();
 
     filter
-        .filter(exchange(HttpMethod.GET, "/api/v1/orders", token("USER")), next(chainCalled))
+        .filter(exchange(HttpMethod.GET, "/api/v1/orders", token("CUSTOMER")), next(chainCalled))
         .block();
 
     assertTrue(chainCalled.get());
+  }
+
+  @Test
+  void rejectsAdminOnCustomerRoute() {
+    var exchange = exchange(HttpMethod.GET, "/api/v1/orders", token("ADMIN"));
+    AtomicBoolean chainCalled = new AtomicBoolean();
+
+    filter.filter(exchange, next(chainCalled)).block();
+
+    assertEquals(403, exchange.getResponse().getStatusCode().value());
+    assertFalse(chainCalled.get());
+  }
+
+  @Test
+  void rejectsTokenFromUnexpectedIssuer() {
+    var exchange =
+        exchange(
+            HttpMethod.GET,
+            "/api/v1/orders",
+            token("CUSTOMER", "unexpected-issuer", "ecommerce-api"));
+    AtomicBoolean chainCalled = new AtomicBoolean();
+
+    filter.filter(exchange, next(chainCalled)).block();
+
+    assertEquals(401, exchange.getResponse().getStatusCode().value());
+    assertFalse(chainCalled.get());
+  }
+
+  @Test
+  void rejectsTokenForUnexpectedAudience() {
+    var exchange =
+        exchange(
+            HttpMethod.GET,
+            "/api/v1/orders",
+            token("CUSTOMER", "ecommerce-identity", "unexpected-audience"));
+    AtomicBoolean chainCalled = new AtomicBoolean();
+
+    filter.filter(exchange, next(chainCalled)).block();
+
+    assertEquals(401, exchange.getResponse().getStatusCode().value());
+    assertFalse(chainCalled.get());
   }
 
   private MockServerWebExchange exchange(HttpMethod method, String path) {
@@ -103,7 +144,8 @@ class JwtAuthenticationGlobalFilterTest {
 
   @Test
   void rejectsCustomerInventoryWrite() {
-    var exchange = exchange(HttpMethod.POST, "/api/v1/admin/inventory/1/receipts", token("CUSTOMER"));
+    var exchange =
+        exchange(HttpMethod.POST, "/api/v1/admin/inventory/1/receipts", token("CUSTOMER"));
     AtomicBoolean chainCalled = new AtomicBoolean();
     filter.filter(exchange, next(chainCalled)).block();
     assertEquals(403, exchange.getResponse().getStatusCode().value());
@@ -125,8 +167,16 @@ class JwtAuthenticationGlobalFilterTest {
   }
 
   private String token(String scope) {
+    return token(scope, "ecommerce-identity", "ecommerce-api");
+  }
+
+  private String token(String scope, String issuer, String audience) {
     Instant now = Instant.now();
     return Jwts.builder()
+        .issuer(issuer)
+        .audience()
+        .add(audience)
+        .and()
         .subject("1")
         .claim("scope", scope)
         .issuedAt(Date.from(now))

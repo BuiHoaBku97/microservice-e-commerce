@@ -27,7 +27,7 @@ public class SecurityConfig {
                     .requestMatchers("/api/v1/admin/**")
                     .hasAuthority("SCOPE_ADMIN")
                     .requestMatchers("/api/v1/cart/**", "/api/v1/orders/**")
-                    .authenticated()
+                    .hasAuthority("SCOPE_CUSTOMER")
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(

@@ -16,17 +16,31 @@ public class RouteValidator {
   }
 
   public boolean hasRouteAccess(ServerWebExchange exchange, Claims claims) {
-    if (!isAdminRoute(exchange)) {
-      return true;
-    }
     String scope = claims.get("scope", String.class);
-    return scope != null && Arrays.asList(scope.split("\\s+")).contains("ADMIN");
+    if (scope == null) {
+      return false;
+    }
+    var scopes = Arrays.asList(scope.split("\\s+"));
+    if (isAdminRoute(exchange)) {
+      return scopes.contains("ADMIN");
+    }
+    if (isCustomerRoute(exchange)) {
+      return scopes.contains("CUSTOMER");
+    }
+    return true;
   }
 
   private boolean isAdminRoute(ServerWebExchange exchange) {
     return pathPatternParser
         .parse(GatewayRouteRule.ADMIN_PATH)
         .matches(PathContainer.parsePath(exchange.getRequest().getPath().value()));
+  }
+
+  private boolean isCustomerRoute(ServerWebExchange exchange) {
+    PathContainer requestPath = PathContainer.parsePath(exchange.getRequest().getPath().value());
+    return GatewayRouteRule.CUSTOMER_PATHS.stream()
+        .map(pathPatternParser::parse)
+        .anyMatch(pattern -> pattern.matches(requestPath));
   }
 
   private boolean matches(GatewayRouteRule.Route rule, ServerWebExchange exchange) {

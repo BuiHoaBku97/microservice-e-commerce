@@ -1,11 +1,12 @@
 package com.ecommerce.order.clients;
 
+import com.ecommerce.order.configs.ServiceJwtProvider;
 import feign.Request;
+import feign.RequestInterceptor;
 import feign.Retryer;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
-import feign.RequestInterceptor;
 
 public class CatalogClientConfiguration {
   @Bean
@@ -22,8 +23,10 @@ public class CatalogClientConfiguration {
   }
 
   @Bean
-  RequestInterceptor catalogServiceTokenInterceptor(
-      @Value("${app.clients.internal-service-token:}") String serviceToken) {
-    return template -> template.header("X-Internal-Service-Token", serviceToken);
+  RequestInterceptor catalogServiceTokenInterceptor(ServiceJwtProvider serviceJwtProvider) {
+    return template ->
+        template.header(
+            "X-Service-Authorization",
+            "Bearer " + serviceJwtProvider.issue("catalog-service", "catalog.checkout"));
   }
 }

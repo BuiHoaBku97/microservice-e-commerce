@@ -14,14 +14,14 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 
 class RouteValidatorTest {
   private RouteValidator routeValidator;
-  private Claims userClaims;
+  private Claims customerClaims;
   private Claims adminClaims;
 
   @BeforeEach
   void setUp() {
     routeValidator = new RouteValidator();
-    userClaims = claimsWithScope("USER");
-    adminClaims = claimsWithScope("USER ADMIN");
+    customerClaims = claimsWithScope("CUSTOMER");
+    adminClaims = claimsWithScope("ADMIN");
   }
 
   @Test
@@ -39,17 +39,17 @@ class RouteValidatorTest {
   }
 
   @Test
-  void allowsUserOnNonAdminProtectedRoute() {
+  void allowsCustomerOnCustomerRoute() {
     var exchange = exchange(HttpMethod.GET, "/api/v1/orders");
 
-    assertTrue(routeValidator.hasRouteAccess(exchange, userClaims));
+    assertTrue(routeValidator.hasRouteAccess(exchange, customerClaims));
   }
 
   @Test
-  void rejectsUserOnAdminRoute() {
+  void rejectsCustomerOnAdminRoute() {
     var exchange = exchange(HttpMethod.POST, "/api/v1/admin/products");
 
-    assertFalse(routeValidator.hasRouteAccess(exchange, userClaims));
+    assertFalse(routeValidator.hasRouteAccess(exchange, customerClaims));
   }
 
   @Test
@@ -59,15 +59,33 @@ class RouteValidatorTest {
     assertTrue(routeValidator.hasRouteAccess(exchange, adminClaims));
   }
 
+  @Test
+  void rejectsAdminOnCustomerRoute() {
+    var exchange = exchange(HttpMethod.GET, "/api/v1/orders");
+
+    assertFalse(routeValidator.hasRouteAccess(exchange, adminClaims));
+  }
+
+  @Test
+  void rejectsMissingScopeOnProtectedRoute() {
+    var exchange = exchange(HttpMethod.GET, "/api/v1/orders");
+    Claims claimsWithoutScope = Jwts.claims().subject("1").build();
+
+    assertFalse(routeValidator.hasRouteAccess(exchange, claimsWithoutScope));
+  }
+
   private MockServerWebExchange exchange(HttpMethod method, String path) {
     return MockServerWebExchange.from(MockServerHttpRequest.method(method, path).build());
   }
 
   @Test
   void opensOnlyGetOnExactInventoryAvailabilityPath() {
-    assertTrue(routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/inventory/availability")));
-    assertFalse(routeValidator.isOpenApi(exchange(HttpMethod.POST, "/api/v1/inventory/availability")));
-    assertFalse(routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/inventory/availability/1")));
+    assertTrue(
+        routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/inventory/availability")));
+    assertFalse(
+        routeValidator.isOpenApi(exchange(HttpMethod.POST, "/api/v1/inventory/availability")));
+    assertFalse(
+        routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/inventory/availability/1")));
     assertFalse(routeValidator.isOpenApi(exchange(HttpMethod.GET, "/api/v1/admin/inventory")));
   }
 

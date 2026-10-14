@@ -104,7 +104,9 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8081
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN must be set}
+      JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64:?JWT_PRIVATE_KEY_BASE64 must be set}
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
+      SERVICE_JWT_PUBLIC_KEY_BASE64: ${SERVICE_JWT_PUBLIC_KEY_BASE64:?SERVICE_JWT_PUBLIC_KEY_BASE64 must be set}
       EUREKA_URI: http://eureka-server:8761/eureka/
       IDENTITY_DB_URL: jdbc:postgresql://postgres:5432/identity_db
       IDENTITY_DB_USERNAME: identity_user
@@ -118,7 +120,10 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8082
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN must be set}
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
+      SERVICE_JWT_PUBLIC_KEY_BASE64: ${SERVICE_JWT_PUBLIC_KEY_BASE64:?SERVICE_JWT_PUBLIC_KEY_BASE64 must be set}
+      SERVICE_JWT_PRIVATE_KEY_BASE64: ${SERVICE_JWT_PRIVATE_KEY_BASE64:?SERVICE_JWT_PRIVATE_KEY_BASE64 must be set}
+      IDENTITY_INTERNAL_URL: http://identity-service:8081
       EUREKA_URI: http://eureka-server:8761/eureka/
       CATALOG_DB_URL: jdbc:postgresql://postgres:5432/catalog_db
       CATALOG_DB_USERNAME: catalog_user
@@ -138,7 +143,9 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8083
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN must be set}
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
+      SERVICE_JWT_PRIVATE_KEY_BASE64: ${SERVICE_JWT_PRIVATE_KEY_BASE64:?SERVICE_JWT_PRIVATE_KEY_BASE64 must be set}
+      IDENTITY_INTERNAL_URL: http://identity-service:8081
       EUREKA_URI: http://eureka-server:8761/eureka/
       ORDER_DB_URL: jdbc:postgresql://postgres:5432/order_db
       ORDER_DB_USERNAME: order_user
@@ -163,6 +170,9 @@ services:
       PAYMENT_DB_USERNAME: payment_user
       PAYMENT_DB_PASSWORD: payment_password
       PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:?PAYMENT_CALLBACK_SECRET must be set}
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
+      SERVICE_JWT_PRIVATE_KEY_BASE64: ${SERVICE_JWT_PRIVATE_KEY_BASE64:?SERVICE_JWT_PRIVATE_KEY_BASE64 must be set}
+      IDENTITY_INTERNAL_URL: http://identity-service:8081
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       postgres:
@@ -180,6 +190,9 @@ services:
       NOTIFICATION_DB_USERNAME: notification_user
       NOTIFICATION_DB_PASSWORD: notification_password
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
+      SERVICE_JWT_PRIVATE_KEY_BASE64: ${SERVICE_JWT_PRIVATE_KEY_BASE64:?SERVICE_JWT_PRIVATE_KEY_BASE64 must be set}
+      IDENTITY_INTERNAL_URL: http://identity-service:8081
     depends_on:
       postgres:
         condition: service_healthy
@@ -193,6 +206,7 @@ services:
       SERVER_PORT: 8080
       EUREKA_URI: http://eureka-server:8761/eureka/
       SPRING_DATA_REDIS_HOST: redis
+      JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
     depends_on:
       eureka-server:
         condition: service_started

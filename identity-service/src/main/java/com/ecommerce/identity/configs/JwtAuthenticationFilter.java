@@ -25,12 +25,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
   private final PublicKey publicKey;
 
-  public JwtAuthenticationFilter(
-      @Value("${security.jwt.public-key-base64}") String publicKeyBase64) throws Exception {
+  public JwtAuthenticationFilter(@Value("${security.jwt.public-key-base64}") String publicKeyBase64)
+      throws Exception {
     publicKey =
         KeyFactory.getInstance("RSA")
-            .generatePublic(
-                new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64)));
+            .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64)));
   }
 
   @Override
@@ -41,23 +40,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (authorization != null && authorization.startsWith("Bearer ")) {
       try {
         Claims claims =
-            Jwts.parser().verifyWith(publicKey).build()
-                .parseSignedClaims(authorization.substring(7)).getPayload();
+            Jwts.parser()
+                .verifyWith(publicKey)
+                .build()
+                .parseSignedClaims(authorization.substring(7))
+                .getPayload();
+        validateIssuerAndAudience(claims);
         if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
           throw new IllegalArgumentException("JWT đã hết hạn");
         }
         String scope = claims.get("scope", String.class);
-        var authorities = scope == null ? java.util.List.<SimpleGrantedAuthority>of() : Arrays.stream(scope.split("\\s+"))
-            .filter(value -> !value.isBlank())
-            .map(value -> new SimpleGrantedAuthority("SCOPE_" + value))
-            .toList();
-        SecurityContextHolder.getContext().setAuthentication(
-            UsernamePasswordAuthenticationToken.authenticated(
-                claims.getSubject(), authorization.substring(7), authorities));
+        var authorities =
+            scope == null
+                ? java.util.List.<SimpleGrantedAuthority>of()
+                : Arrays.stream(scope.split("\\s+"))
+                    .filter(value -> !value.isBlank())
+                    .map(value -> new SimpleGrantedAuthority("SCOPE_" + value))
+                    .toList();
+        SecurityContextHolder.getContext()
+            .setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(
+                    claims.getSubject(), authorization.substring(7), authorities));
       } catch (Exception exception) {
         SecurityContextHolder.clearContext();
       }
     }
     filterChain.doFilter(request, response);
+  }
+
+  private void validateIssuerAndAudience(Claims claims) {
+    if (!"ecommerce-identity".equals(claims.getIssuer())
+        || claims.getAudience() == null
+        || !claims.getAudience().contains("ecommerce-api")) {
+      throw new IllegalArgumentException("JWT issuer or audience is invalid");
+    }
   }
 }

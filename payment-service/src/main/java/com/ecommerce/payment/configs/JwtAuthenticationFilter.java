@@ -48,6 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .build()
                 .parseSignedClaims(header.substring(7))
                 .getPayload();
+        validateIssuerAndAudience(claims);
         if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
           throw new IllegalArgumentException("JWT đã hết hạn");
         }
@@ -70,5 +71,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       }
     }
     chain.doFilter(request, response);
+  }
+
+  private void validateIssuerAndAudience(Claims claims) {
+    if (!"ecommerce-identity".equals(claims.getIssuer())
+        || claims.getAudience() == null
+        || !claims.getAudience().contains("ecommerce-api")) {
+      throw new IllegalArgumentException("JWT issuer or audience is invalid");
+    }
   }
 }

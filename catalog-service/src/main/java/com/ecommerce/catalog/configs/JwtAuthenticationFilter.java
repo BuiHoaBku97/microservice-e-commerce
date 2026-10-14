@@ -43,6 +43,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       try {
         String token = authorization.substring(7);
         Claims claims = parseClaims(token);
+        validateIssuerAndAudience(claims);
 
         if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
           throw new IllegalArgumentException("JWT đã hết hạn");
@@ -68,5 +69,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private Claims parseClaims(String token) {
     return Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token).getPayload();
+  }
+
+  private void validateIssuerAndAudience(Claims claims) {
+    if (!"ecommerce-identity".equals(claims.getIssuer())
+        || claims.getAudience() == null
+        || !claims.getAudience().contains("ecommerce-api")) {
+      throw new IllegalArgumentException("JWT issuer or audience is invalid");
+    }
   }
 }

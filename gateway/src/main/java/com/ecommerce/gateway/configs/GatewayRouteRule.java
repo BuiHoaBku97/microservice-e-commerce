@@ -5,6 +5,9 @@ import org.springframework.http.HttpMethod;
 
 public final class GatewayRouteRule {
   public static final String ADMIN_PATH = "/api/v1/admin/**";
+  public static final List<String> CUSTOMER_PATHS =
+      List.of(
+          "/api/v1/users/**", "/api/v1/cart/**", "/api/v1/orders/**", "/api/v1/notifications/**");
 
   public static final List<Route> OPEN_API =
       List.of(

@@ -114,6 +114,10 @@ class InventoryAvailabilityControllerTest {
 
   private static String token(String scope) {
     return Jwts.builder()
+        .issuer("ecommerce-identity")
+        .audience()
+        .add("ecommerce-api")
+        .and()
         .subject("1")
         .claim("scope", scope)
         .expiration(Date.from(Instant.now().plusSeconds(60)))

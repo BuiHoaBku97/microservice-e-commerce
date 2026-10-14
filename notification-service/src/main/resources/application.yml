@@ -32,12 +32,18 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
   security:
     jwt:
-      public-key-base64: ${JWT_PUBLIC_KEY_BASE64:MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwavlvOpZtedOU1aJLAJD612jceVjo/6yyv2VSxJOc0Z4kcluOAh70wyqj5pT1z7HVhvQ6M1p/JjXVd/JwlwXoNWmdIkMR5PBxLlNHC9LawOw6/etWaFMwYJHxnppXLUHGP8pbj4x8h2W+HvBbPYgvikPTz32kflhwk7+sm4UI4x33IOElEscg1jcybNvobYN4Qu2CDNQ24AIsKOwRwrI+372F/uw3xqiwCTeJpoDb/KQp6Bzi5MOo4aOCJNBnjcepM+f0OeR6AZdDUmyEJ7UdFeU1kZscD2dF2AIM5ppkZfcGi5S+N/1OoF0yw0pZ+PvepLTT+aCTVIixdxeQ9XaKQIDAQAB}
+      public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
 
 server:
   port: 8085
 
 app:
+  service-jwt:
+    private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
+    issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
+    key-id: ${SERVICE_JWT_KEY_ID:service-key-1}
+  active-account:
+    identity-url: ${IDENTITY_INTERNAL_URL:http://localhost:8081}
   notification:
     max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
     retry-seconds: ${NOTIFICATION_RETRY_SECONDS:30}

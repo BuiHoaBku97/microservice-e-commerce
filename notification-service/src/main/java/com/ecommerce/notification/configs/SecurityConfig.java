@@ -22,6 +22,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/v1/admin/**")
                     .hasAuthority("SCOPE_ADMIN")
+                    .requestMatchers("/api/v1/notifications/**")
+                    .hasAuthority("SCOPE_CUSTOMER")
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(
