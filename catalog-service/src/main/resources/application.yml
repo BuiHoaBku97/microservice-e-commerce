@@ -17,6 +17,7 @@ spring:
 security:
   service-jwt:
     public-key-base64: ${SERVICE_JWT_PUBLIC_KEY_BASE64}
+    public-keys: ${SERVICE_JWT_PUBLIC_KEYS:${SERVICE_JWT_PUBLIC_KEY_BASE64}}
     private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
     issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
     key-id: ${SERVICE_JWT_KEY_ID:service-key-1}

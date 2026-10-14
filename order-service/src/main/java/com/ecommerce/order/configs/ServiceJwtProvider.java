@@ -20,11 +20,11 @@ public class ServiceJwtProvider {
   private final long ttlSeconds;
 
   public ServiceJwtProvider(
-      @Value("${app.service-jwt.private-privateKeyBase64-base64:${spring.security.jwt.private-privateKeyBase64-base64}}")
+      @Value("${app.service-jwt.private-key-base64:${spring.security.jwt.private-key-base64}}")
           String privateKeyBase64,
       @Value("${app.service-jwt.issuer:ecommerce-internal}") String issuer,
       @Value("${app.service-jwt.subject:order-service}") String subject,
-      @Value("${app.service-jwt.privateKeyBase64-id:service-privateKeyBase64-1}") String keyId,
+      @Value("${app.service-jwt.key-id:service-key-1}") String keyId,
       @Value("${app.service-jwt.ttl-seconds:60}") long ttlSeconds)
       throws Exception {
     this.privateKey =

@@ -16,18 +16,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 public class InternalServiceTokenFilter extends OncePerRequestFilter {
-  private final PublicKey publicKey;
+  private final Map<String, PublicKey> publicKeys;
   private final String issuer;
 
   @Autowired
   public InternalServiceTokenFilter(
-      @Value("${security.service-jwt.public-publicKeyBase64-base64:${spring.security.jwt.public-publicKeyBase64-base64}}")
-          String publicKeyBase64,
+      @Value(
+              "${security.service-jwt.public-keys:${security.service-jwt.public-key-base64:${spring.security.jwt.public-key-base64}}}")
+          String configuredKeyRing,
       @Value("${security.service-jwt.issuer:ecommerce-internal}") String issuer)
       throws Exception {
-    publicKey =
-        KeyFactory.getInstance("RSA")
-            .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64)));
+    publicKeys = parseKeys(configuredKeyRing);
     this.issuer = issuer;
   }
 
@@ -39,21 +38,29 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
       return;
     }
-    String header = request.getHeader("X-Service-Authorization");
+    String serviceAuthorizationHeader = request.getHeader("X-Service-Authorization");
+    if (serviceAuthorizationHeader == null || !serviceAuthorizationHeader.startsWith("Bearer ")) {
+      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN");
+      return;
+    }
     try {
-      if (header == null || !header.startsWith("Bearer ")) throw new SecurityException();
       Claims claims =
           Jwts.parser()
-              .verifyWith(publicKey)
+              .keyLocator(this::locateKey)
               .requireIssuer(issuer)
               .build()
-              .parseSignedClaims(header.substring(7))
+              .parseSignedClaims(serviceAuthorizationHeader.substring(7))
               .getPayload();
       String scope = claims.get("scope", String.class);
-      if (!claims.getAudience().contains("catalog-service")
-          || scope == null
-          || Arrays.stream(scope.split("\\s+")).noneMatch("catalog.checkout"::equals))
-        throw new SecurityException();
+      if (!claims.getAudience().contains("catalog-service")) {
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_AUDIENCE");
+        return;
+      }
+      if (scope == null
+          || Arrays.stream(scope.split("\\s+")).noneMatch("catalog.checkout"::equals)) {
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, "INSUFFICIENT_SERVICE_SCOPE");
+        return;
+      }
       SecurityContextHolder.getContext()
           .setAuthentication(
               UsernamePasswordAuthenticationToken.authenticated(
@@ -63,8 +70,36 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
                       new SimpleGrantedAuthority("SCOPE_INTERNAL_SERVICE"),
                       new SimpleGrantedAuthority("SCOPE_catalog.checkout"))));
     } catch (Exception exception) {
-      /* keep any verified user context */
+      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN");
+      return;
     }
     chain.doFilter(request, response);
+  }
+
+  private PublicKey locateKey(io.jsonwebtoken.Header serviceAuthorizationHeader) {
+    String keyId = String.valueOf(serviceAuthorizationHeader.get("kid"));
+    PublicKey locatedPublicKey = publicKeys.get(keyId);
+    if (locatedPublicKey == null && publicKeys.size() == 1) {
+      locatedPublicKey = publicKeys.values().iterator().next();
+    }
+    if (locatedPublicKey == null) {
+      throw new SecurityException("UNKNOWN_SERVICE_KEY");
+    }
+    return locatedPublicKey;
+  }
+
+  private Map<String, PublicKey> parseKeys(String configuredKeys) throws Exception {
+    Map<String, PublicKey> parsedPublicKeys = new LinkedHashMap<>();
+    for (String entry : configuredKeys.split(";")) {
+      String[] keyEntryParts = entry.split("=", 2);
+      String keyId = keyEntryParts.length == 2 ? keyEntryParts[0].trim() : "default";
+      String publicKeyBase64 =
+          keyEntryParts.length == 2 ? keyEntryParts[1].trim() : keyEntryParts[0].trim();
+      parsedPublicKeys.put(
+          keyId,
+          KeyFactory.getInstance("RSA")
+              .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64))));
+    }
+    return Map.copyOf(parsedPublicKeys);
   }
 }

@@ -14,6 +14,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 class InternalServiceTokenFilterTest {
   private static final KeyPair KEYS = keys();
+  private static final KeyPair NEXT_KEYS = keys();
 
   @AfterEach
   void clear() {
@@ -47,6 +48,24 @@ class InternalServiceTokenFilterTest {
     }
   }
 
+  @Test
+  void acceptsOldAndNewKidsDuringRotationButRejectsUnknownKid() throws Exception {
+    String ring =
+        "next="
+            + Base64.getEncoder().encodeToString(NEXT_KEYS.getPublic().getEncoded())
+            + ";current="
+            + Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded());
+    var filter = new InternalServiceTokenFilter(ring, "ecommerce-internal");
+    filter(filter, token("current", KEYS, "identity-service", "identity.checkout", 60));
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+    SecurityContextHolder.clearContext();
+    filter(filter, token("next", NEXT_KEYS, "identity-service", "identity.checkout", 60));
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+    SecurityContextHolder.clearContext();
+    filter(filter, token("unknown", KEYS, "identity-service", "identity.checkout", 60));
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+  }
+
   private void filter(String token) throws Exception {
     var request = new MockHttpServletRequest("POST", "/internal/v1/users/current/checkout-context");
     request.setServletPath("/internal/v1/users/current/checkout-context");
@@ -54,6 +73,13 @@ class InternalServiceTokenFilterTest {
     new InternalServiceTokenFilter(
             Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded()), "ecommerce-internal")
         .doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+  }
+
+  private void filter(InternalServiceTokenFilter filter, String token) throws Exception {
+    var request = new MockHttpServletRequest("POST", "/internal/v1/users/current/checkout-context");
+    request.setServletPath("/internal/v1/users/current/checkout-context");
+    request.addHeader("X-Service-Authorization", "Bearer " + token);
+    filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
   }
 
   private String token(String audience, String scope, long ttlSeconds) {
@@ -72,11 +98,30 @@ class InternalServiceTokenFilterTest {
         .compact();
   }
 
+  private String token(String kid, KeyPair pair, String audience, String scope, long ttlSeconds) {
+    Instant now = Instant.now();
+    return Jwts.builder()
+        .header()
+        .keyId(kid)
+        .and()
+        .issuer("ecommerce-internal")
+        .subject("order-service")
+        .audience()
+        .add(audience)
+        .and()
+        .claim("scope", scope)
+        .id(UUID.randomUUID().toString())
+        .issuedAt(Date.from(now))
+        .expiration(Date.from(now.plusSeconds(ttlSeconds)))
+        .signWith(pair.getPrivate(), Jwts.SIG.RS256)
+        .compact();
+  }
+
   private static KeyPair keys() {
     try {
-      KeyPairGenerator g = KeyPairGenerator.getInstance("RSA");
-      g.initialize(2048);
-      return g.generateKeyPair();
+      KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+      keyPairGenerator.initialize(2048);
+      return keyPairGenerator.generateKeyPair();
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }

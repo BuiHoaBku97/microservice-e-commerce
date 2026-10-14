@@ -66,9 +66,9 @@ class InternalServiceTokenFilterTest {
 
   private static KeyPair keys() {
     try {
-      KeyPairGenerator g = KeyPairGenerator.getInstance("RSA");
-      g.initialize(2048);
-      return g.generateKeyPair();
+      KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+      keyPairGenerator.initialize(2048);
+      return keyPairGenerator.generateKeyPair();
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
