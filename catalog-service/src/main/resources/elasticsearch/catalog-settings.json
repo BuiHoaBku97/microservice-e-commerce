@@ -1,0 +1,10 @@
+{
+  "analysis": {
+    "analyzer": {
+      "vietnamese_folding": {
+        "tokenizer": "standard",
+        "filter": ["lowercase", "asciifolding"]
+      }
+    }
+  }
+}

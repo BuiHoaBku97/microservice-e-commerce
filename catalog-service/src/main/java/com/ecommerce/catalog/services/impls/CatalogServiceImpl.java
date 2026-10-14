@@ -1,35 +1,37 @@
 package com.ecommerce.catalog.services.impls;
 
+import com.ecommerce.catalog.models.dtos.requests.ChangeStatusRequest;
 import com.ecommerce.catalog.models.dtos.requests.CreateCategoryRequest;
 import com.ecommerce.catalog.models.dtos.requests.CreateProductRequest;
 import com.ecommerce.catalog.models.dtos.requests.CreateSkuRequest;
-import com.ecommerce.catalog.models.dtos.requests.ChangeStatusRequest;
 import com.ecommerce.catalog.models.dtos.requests.UpdateCategoryRequest;
 import com.ecommerce.catalog.models.dtos.requests.UpdateProductRequest;
 import com.ecommerce.catalog.models.dtos.requests.UpdateSkuRequest;
 import com.ecommerce.catalog.models.dtos.responses.CategoryResponse;
 import com.ecommerce.catalog.models.dtos.responses.CheckoutItemResponse;
 import com.ecommerce.catalog.models.dtos.responses.ProductResponse;
-import com.ecommerce.catalog.models.dtos.responses.SkuResponse;
 import com.ecommerce.catalog.models.dtos.responses.SkuPriceHistoryResponse;
+import com.ecommerce.catalog.models.dtos.responses.SkuResponse;
 import com.ecommerce.catalog.models.entities.Category;
 import com.ecommerce.catalog.models.entities.Product;
 import com.ecommerce.catalog.models.entities.Sku;
+import com.ecommerce.catalog.models.entities.SkuPriceHistory;
 import com.ecommerce.catalog.models.entities.Status;
 import com.ecommerce.catalog.repositories.CategoryRepository;
 import com.ecommerce.catalog.repositories.ProductRepository;
-import com.ecommerce.catalog.repositories.SkuRepository;
 import com.ecommerce.catalog.repositories.SkuPriceHistoryRepository;
-import com.ecommerce.catalog.models.entities.SkuPriceHistory;
-import org.springframework.beans.factory.annotation.Value;
+import com.ecommerce.catalog.repositories.SkuRepository;
+import com.ecommerce.catalog.services.CatalogIndexEventService;
 import com.ecommerce.catalog.services.CatalogService;
 import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CatalogServiceImpl implements CatalogService {
@@ -38,17 +40,37 @@ public class CatalogServiceImpl implements CatalogService {
   private final SkuRepository skuRepository;
   private final SkuPriceHistoryRepository priceHistoryRepository;
   private final String defaultImageUrl;
+  private final CatalogIndexEventService catalogIndexEventService;
+
+  @Autowired
+  public CatalogServiceImpl(
+      CategoryRepository categoryRepository,
+      ProductRepository productRepository,
+      SkuRepository skuRepository,
+      SkuPriceHistoryRepository priceHistoryRepository,
+      CatalogIndexEventService catalogIndexEventService,
+      @Value(
+              "${app.catalog.default-image-url:https://res.cloudinary.com/demo/image/upload/product-placeholder.jpg}")
+          String defaultImageUrl) {
+    this.categoryRepository = categoryRepository;
+    this.productRepository = productRepository;
+    this.skuRepository = skuRepository;
+    this.priceHistoryRepository = priceHistoryRepository;
+    this.catalogIndexEventService = catalogIndexEventService;
+    this.defaultImageUrl = defaultImageUrl;
+  }
 
   public CatalogServiceImpl(
       CategoryRepository categoryRepository,
       ProductRepository productRepository,
       SkuRepository skuRepository,
       SkuPriceHistoryRepository priceHistoryRepository,
-      @Value("${app.catalog.default-image-url:https://res.cloudinary.com/demo/image/upload/product-placeholder.jpg}") String defaultImageUrl) {
+      String defaultImageUrl) {
     this.categoryRepository = categoryRepository;
     this.productRepository = productRepository;
     this.skuRepository = skuRepository;
     this.priceHistoryRepository = priceHistoryRepository;
+    this.catalogIndexEventService = null;
     this.defaultImageUrl = defaultImageUrl;
   }
 
@@ -79,9 +101,12 @@ public class CatalogServiceImpl implements CatalogService {
         categoryRepository
             .findById(request.categoryId())
             .orElseThrow(() -> new IllegalArgumentException("CATEGORY_NOT_FOUND"));
-    List<String> images = request.imageUrls() == null ? List.of(defaultImageUrl) : request.imageUrls();
+    List<String> images =
+        request.imageUrls() == null ? List.of(defaultImageUrl) : request.imageUrls();
     Product product = new Product(category, request.name().trim(), request.description(), images);
-    return toResponse(productRepository.save(product), List.of());
+    Product saved = productRepository.save(product);
+    enqueue(saved, "PRODUCT_CREATED");
+    return toResponse(saved, List.of());
   }
 
   @Override
@@ -100,16 +125,14 @@ public class CatalogServiceImpl implements CatalogService {
     if (skuRepository.existsByProductIdAndColorAndSize(productId, color, size)) {
       throw new IllegalStateException("VARIANT_EXISTS");
     }
-    Sku sku =
-        new Sku(
-            product,
-            request.code().trim(),
-            color,
-            size,
-            request.price());
-    Sku saved = skuRepository.save(sku);
-    priceHistoryRepository.save(new SkuPriceHistory(saved, null, saved.getPrice(), "INITIAL_PRICE"));
-    return toResponse(saved);
+    Sku sku = new Sku(product, request.code().trim(), color, size, request.price());
+    Sku savedSku = skuRepository.save(sku);
+    priceHistoryRepository.save(
+        new SkuPriceHistory(savedSku, null, savedSku.getPrice(), "INITIAL_PRICE"));
+    product.bumpSearchVersion();
+    productRepository.save(product);
+    enqueue(product, "SKU_CREATED");
+    return toResponse(savedSku);
   }
 
   @Override
@@ -121,21 +144,22 @@ public class CatalogServiceImpl implements CatalogService {
             .findById(productId)
             .filter(value -> value.getStatus() == Status.ACTIVE)
             .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
-    List<Sku> skus = skuRepository.findByProductIdAndStatusOrderByIdAsc(productId, Status.ACTIVE);
-    if (skus.isEmpty()) {
+    List<Sku> activeSkus =
+        skuRepository.findByProductIdAndStatusOrderByIdAsc(productId, Status.ACTIVE);
+    if (activeSkus.isEmpty()) {
       throw new IllegalArgumentException("PRODUCT_NOT_FOUND");
     }
-    return toResponse(product, skus);
+    return toResponse(product, activeSkus);
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<ProductResponse> searchPublicProducts(String keyword) {
-    String normalized = keyword == null ? "" : keyword.trim();
-    return (normalized.isBlank()
+    String normalizedKeyword = keyword == null ? "" : keyword.trim();
+    return (normalizedKeyword.isBlank()
             ? productRepository.findByStatusOrderByNameAsc(Status.ACTIVE)
             : productRepository.findByStatusAndNameContainingIgnoreCaseOrderByNameAsc(
-                Status.ACTIVE, normalized))
+                Status.ACTIVE, normalizedKeyword))
         .stream()
             .map(
                 product ->
@@ -195,66 +219,93 @@ public class CatalogServiceImpl implements CatalogService {
         .toList();
   }
 
-  @Override @Transactional(readOnly = true)
+  @Override
+  @Transactional(readOnly = true)
   public List<CategoryResponse> listAllCategories() {
     return categoryRepository.findAll().stream().map(this::toResponse).toList();
   }
 
-  @Override @Transactional
+  @Override
+  @Transactional
   public CategoryResponse updateCategory(Long id, UpdateCategoryRequest request) {
-    Category category = categoryRepository.findById(id)
-        .orElseThrow(() -> new IllegalArgumentException("CATEGORY_NOT_FOUND"));
+    Category category =
+        categoryRepository
+            .findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("CATEGORY_NOT_FOUND"));
     requireVersion(category.getVersion(), request.version());
     category.update(request.name().trim(), request.slug().trim().toLowerCase());
     category.changeStatus(request.status());
     return toResponse(categoryRepository.save(category));
   }
 
-  @Override @Transactional(readOnly = true)
+  @Override
+  @Transactional(readOnly = true)
   public List<ProductResponse> listAllProducts() {
     return productRepository.findAll().stream()
-        .map(product -> toResponse(product, skuRepository.findByProductIdOrderByIdAsc(product.getId())))
+        .map(
+            product ->
+                toResponse(product, skuRepository.findByProductIdOrderByIdAsc(product.getId())))
         .toList();
   }
 
-  @Override @Transactional(readOnly = true)
+  @Override
+  @Transactional(readOnly = true)
   public ProductResponse getAdminProduct(Long id) {
-    Product product = productRepository.findById(id)
-        .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
+    Product product =
+        productRepository
+            .findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
     return toResponse(product, skuRepository.findByProductIdOrderByIdAsc(id));
   }
 
-  @Override @Transactional
+  @Override
+  @Transactional
   @CacheEvict(cacheNames = "product", key = "#id")
   public ProductResponse updateProduct(Long id, UpdateProductRequest request) {
-    Product product = productRepository.findById(id)
-        .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
+    Product product =
+        productRepository
+            .findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
     requireVersion(product.getVersion(), request.version());
-    Category category = categoryRepository.findById(request.categoryId())
-        .orElseThrow(() -> new IllegalArgumentException("CATEGORY_NOT_FOUND"));
-    List<String> images = request.imageUrls() == null ? product.getImageUrls() : request.imageUrls();
+    Category category =
+        categoryRepository
+            .findById(request.categoryId())
+            .orElseThrow(() -> new IllegalArgumentException("CATEGORY_NOT_FOUND"));
+    List<String> images =
+        request.imageUrls() == null ? product.getImageUrls() : request.imageUrls();
     product.update(category, request.name().trim(), request.description(), images);
-    return toResponse(productRepository.save(product), skuRepository.findByProductIdOrderByIdAsc(id));
+    product.bumpSearchVersion();
+    Product saved = productRepository.save(product);
+    enqueue(saved, "PRODUCT_UPDATED");
+    return toResponse(saved, skuRepository.findByProductIdOrderByIdAsc(id));
   }
 
-  @Override @Transactional
+  @Override
+  @Transactional
   @CacheEvict(cacheNames = "product", key = "#id")
   public ProductResponse changeProductStatus(Long id, ChangeStatusRequest request) {
-    Product product = productRepository.findById(id)
-        .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
+    Product product =
+        productRepository
+            .findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("PRODUCT_NOT_FOUND"));
     requireVersion(product.getVersion(), request.version());
     if (request.status() == Status.ACTIVE
         && skuRepository.findByProductIdAndStatusOrderByIdAsc(id, Status.ACTIVE).isEmpty()) {
       throw new IllegalStateException("PRODUCT_REQUIRES_ACTIVE_SKU");
     }
     product.changeStatus(request.status());
-    return toResponse(productRepository.save(product), skuRepository.findByProductIdOrderByIdAsc(id));
+    product.bumpSearchVersion();
+    Product saved = productRepository.save(product);
+    enqueue(saved, "PRODUCT_STATUS_CHANGED");
+    return toResponse(saved, skuRepository.findByProductIdOrderByIdAsc(id));
   }
 
-  @Override @Transactional
+  @Override
+  @Transactional
   @CacheEvict(cacheNames = "product", key = "#result.productId()")
   public SkuResponse updateSku(Long id, UpdateSkuRequest request) {
-    Sku sku = skuRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
+    Sku sku =
+        skuRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
     requireVersion(sku.getVersion(), request.version());
     String color = request.color() == null ? sku.getColor() : normalizeVariant(request.color());
     String size = request.size() == null ? sku.getSize() : normalizeVariant(request.size());
@@ -269,32 +320,53 @@ public class CatalogServiceImpl implements CatalogService {
     if (!oldPrice.equals(newPrice)) {
       priceHistoryRepository.save(new SkuPriceHistory(saved, oldPrice, newPrice, request.reason()));
     }
+    Product product = saved.getProduct();
+    product.bumpSearchVersion();
+    productRepository.save(product);
+    enqueue(product, "SKU_UPDATED");
     return toResponse(saved);
   }
 
-  @Override @Transactional
+  @Override
+  @Transactional
   @CacheEvict(cacheNames = "product", key = "#result.productId()")
   public SkuResponse changeSkuStatus(Long id, ChangeStatusRequest request) {
-    Sku sku = skuRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
+    Sku sku =
+        skuRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
     requireVersion(sku.getVersion(), request.version());
     sku.changeStatus(request.status());
-    return toResponse(skuRepository.save(sku));
+    Sku saved = skuRepository.save(sku);
+    Product product = saved.getProduct();
+    product.bumpSearchVersion();
+    productRepository.save(product);
+    enqueue(product, "SKU_STATUS_CHANGED");
+    return toResponse(saved);
   }
 
   @Override
   @Transactional(readOnly = true)
   public Page<SkuPriceHistoryResponse> getSkuPriceHistory(Long id, Pageable pageable) {
-    if (!skuRepository.existsById(id)) throw new IllegalArgumentException("SKU_NOT_FOUND");
-    return priceHistoryRepository.findBySkuIdOrderByCreatedAtDesc(id, pageable)
+    if (!skuRepository.existsById(id)) {
+      throw new IllegalArgumentException("SKU_NOT_FOUND");
+    }
+    return priceHistoryRepository
+        .findBySkuIdOrderByCreatedAtDesc(id, pageable)
         .map(SkuPriceHistoryResponse::from);
   }
 
   private void requireVersion(Long current, Long expected) {
-    if (!java.util.Objects.equals(current, expected)) throw new IllegalStateException("VERSION_CONFLICT");
+    if (!java.util.Objects.equals(current, expected))
+      throw new IllegalStateException("VERSION_CONFLICT");
   }
 
   private String normalizeVariant(String value) {
     return value == null ? "" : value.trim().toUpperCase();
+  }
+
+  private void enqueue(Product product, String eventType) {
+    if (catalogIndexEventService != null) {
+      catalogIndexEventService.enqueue(product, eventType);
+    }
   }
 
   private CategoryResponse toResponse(Category category) {
@@ -320,7 +392,7 @@ public class CatalogServiceImpl implements CatalogService {
         sku.getVersion());
   }
 
-  private ProductResponse toResponse(Product product, List<Sku> skus) {
+  private ProductResponse toResponse(Product product, List<Sku> skuRows) {
     return new ProductResponse(
         product.getId(),
         product.getName(),
@@ -329,6 +401,6 @@ public class CatalogServiceImpl implements CatalogService {
         product.getImageUrls(),
         product.getStatus(),
         product.getVersion(),
-        skus.stream().map(this::toResponse).toList());
+        skuRows.stream().map(this::toResponse).toList());
   }
 }

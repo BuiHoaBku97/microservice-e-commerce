@@ -54,6 +54,9 @@ public class Product {
   @Column(nullable = false)
   private Long version;
 
+  @Column(name = "search_version", nullable = false)
+  private Long searchVersion = 1L;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -92,5 +95,9 @@ public class Product {
 
   public void changeStatus(Status status) {
     this.status = status;
+  }
+
+  public void bumpSearchVersion() {
+    searchVersion++;
   }
 }
