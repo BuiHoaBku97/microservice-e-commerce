@@ -20,26 +20,33 @@
 - Gateway: route mới, callback public riêng, ADMIN authorization và Redis rate limit theo user/IP;
   public GET fallback khi Redis lỗi, write/login/checkout fail closed.
 
-## Còn mở so với toàn bộ thiết kế
+## Ma trận sau triển khai remaining plan
 
-- Catalog Elasticsearch: mapping/analyzer tiếng Việt/không dấu, durable Catalog outbox/indexer,
-  filter/sort/page, external product version và reindex job bền vững chưa được triển khai.
-- Inventory: chưa có reservation/reservation_items và stock_movements riêng; API inventory write
-  chưa dùng Idempotency-Key và chưa có list/movement history theo contract.
-- Thứ tự khóa payment/cancel/expiry cần tách orchestration để luôn lấy Redis SKU lock trước khóa
-  order/reservation trong cùng transaction và chỉ unlock sau commit/rollback.
-- Internal authentication vẫn dùng shared service token M2; thiết kế đích yêu cầu service JWT có
-  audience/scope riêng và end-user context đã xác minh.
-- Identity chưa lưu account_status_history; kiểm tra ACTIVE tức thời trên mọi protected request ở
-  các service vẫn cần cơ chế introspection/cache có chính sách rõ ràng.
-- Payment demo simulator endpoint chưa có; report hiện là tổng toàn kỳ, chưa nhận from/to.
-- OpenAPI, Postman collection, load test 100 khách, chaos test từng dependency và smoke toàn bộ
-  Docker Compose vẫn cần hoàn thiện trước nghiệm thu cuối.
+| Phase | Trạng thái | Bằng chứng chính |
+|---|---|---|
+| P1 | DONE | Reservation bền vững; Redis lock bao ngoài `TransactionTemplate`; checkout/payment/cancel/expiry ghi order, reservation, inventory và outbox trong cùng transaction. |
+| P2 | DONE | `stock_movements`, idempotency record, API inventory list/movement và bắt buộc `Idempotency-Key`. |
+| P3 | DONE | Processed-event registry theo consumer, outbox lease/reclaim/backoff/FAILED và API inspect/replay. |
+| P4 | DONE | Elasticsearch analyzer tiếng Việt, filter/sort/page, durable catalog outbox, version guard, checkpoint và atomic alias switch khi reindex. |
+| P5 | DONE | Service JWT RS256 có audience/scope/jti/kid, key ring phục vụ grace period và không còn shared static token. |
+| P6 | DONE | Refresh token có `session_id`, rotation/revoke theo session, account status history và protected service fail closed khi Identity unavailable/không ACTIVE. |
+| P7 | DONE | Demo simulator chỉ ở profile local/demo và đi qua callback HMAC; admin list/history/report dùng query phân trang và totals tách biệt. |
+| P8 | ACCEPTANCE | OpenAPI/Postman/k6/chaos runbook và full-flow Compose smoke đã có; cần chạy trên Docker daemon và lưu báo cáo đo thực tế. |
+
+Các mục payment attempts và vô hiệu access token ngay sau logout vẫn nằm ngoài baseline vì contract
+nguồn chưa định nghĩa. Report payment tiếp tục là tổng toàn kỳ đúng REST contract hiện tại.
 
 ## Verification đã chạy
 
 - `./gradlew test --continue --rerun-tasks`
 - `./gradlew :event-flow-tests:integrationTest --rerun-tasks`
 - `docker compose config --quiet` với hai secret bắt buộc được cấp qua environment.
+
+Verification của đợt triển khai remaining plan:
+
+- `./gradlew test --continue` — xanh toàn bộ 31 task.
+- `docker compose config --quiet` — hợp lệ với các biến khóa bắt buộc.
+- Compose smoke/load/chaos runtime — chưa chạy vì Docker daemon không hoạt động trên máy hiện tại;
+  giữ trạng thái `ACCEPTANCE`, không đánh dấu `DONE`.
 
 Không tự động commit các thay đổi của đợt audit.

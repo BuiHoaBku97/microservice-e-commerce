@@ -28,6 +28,10 @@ components:
       properties:
         result: {type: string, enum: [SUCCESS, FAILED]}
 paths:
+  /auth/register:
+    post:
+      summary: Register a customer account
+      responses: {'201': {description: Customer created}, '409': {description: Email already exists}}
   /auth/login:
     post:
       summary: Login and create a refresh session
@@ -52,11 +56,51 @@ paths:
         - {name: page, in: query, schema: {type: integer, minimum: 0}}
         - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
       responses: {'200': {description: Page of search documents}, '503': {description: Elasticsearch unavailable}}
+  /users/me/addresses:
+    get: {security: [{userJwt: []}], responses: {'200': {description: Address list}}}
+    post: {security: [{userJwt: []}], responses: {'201': {description: Address created}}}
+  /cart:
+    get: {security: [{userJwt: []}], responses: {'200': {description: Current cart}}}
+    delete: {security: [{userJwt: []}], responses: {'204': {description: Cart cleared}}}
+  /cart/items:
+    post: {security: [{userJwt: []}], responses: {'200': {description: Item added}, '409': {description: Cart version conflict}}}
   /orders/checkout:
     post:
       security: [{userJwt: []}]
       parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
       responses: {'201': {description: Order and reservation created}, '409': {description: Idempotency conflict or insufficient stock}}
+  /orders:
+    get: {security: [{userJwt: []}], responses: {'200': {description: Customer order list}}}
+  /orders/{orderId}:
+    get:
+      security: [{userJwt: []}]
+      parameters: [{name: orderId, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses: {'200': {description: Owned order}, '404': {description: Order not found}}
+  /orders/{orderId}/cancel:
+    post:
+      security: [{userJwt: []}]
+      parameters: [{name: orderId, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses: {'200': {description: Order cancelled and reservation released}}
+  /orders/{orderId}/payment:
+    get:
+      security: [{userJwt: []}]
+      parameters: [{name: orderId, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses: {'200': {description: Payment owned by the customer}}
+  /admin/categories:
+    get: {security: [{userJwt: []}], responses: {'200': {description: Category list}}}
+    post: {security: [{userJwt: []}], responses: {'201': {description: Category created}}}
+  /admin/products:
+    post: {security: [{userJwt: []}], responses: {'201': {description: Draft product created}}}
+  /admin/products/{productId}/skus:
+    post:
+      security: [{userJwt: []}]
+      parameters: [{name: productId, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses: {'201': {description: SKU created}}
+  /admin/products/{productId}/status:
+    put:
+      security: [{userJwt: []}]
+      parameters: [{name: productId, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses: {'200': {description: Product status updated}, '409': {description: Version conflict}}
   /admin/inventory:
     get:
       security: [{userJwt: []}]
@@ -75,6 +119,20 @@ paths:
         required: true
         content: {application/json: {schema: {$ref: '#/components/schemas/InventoryMutation'}}}
       responses: {'200': {description: Stock received}, '409': {description: Key reused with another payload}}
+  /admin/inventory/{skuId}/initialize:
+    post:
+      security: [{userJwt: []}]
+      parameters:
+        - {name: skuId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses: {'200': {description: Inventory initialized idempotently}}
+  /admin/inventory/{skuId}/adjustments:
+    post:
+      security: [{userJwt: []}]
+      parameters:
+        - {name: skuId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses: {'200': {description: Inventory adjusted}, '409': {description: Version or idempotency conflict}}
   /admin/inventory/{skuId}/movements:
     get:
       security: [{userJwt: []}]
@@ -100,6 +158,28 @@ paths:
       requestBody:
         content: {application/json: {schema: {$ref: '#/components/schemas/PaymentSimulation'}}}
       responses: {'200': {description: Simulated payment}, '404': {description: Disabled outside demo/local profile}}
+  /admin/payments:
+    get:
+      security: [{userJwt: []}]
+      responses: {'200': {description: Filtered payment page}}
+  /admin/reports/payments:
+    get:
+      security: [{userJwt: []}]
+      responses: {'200': {description: Received, accepted and review totals}}
+  /admin/users/{id}/lock:
+    post:
+      security: [{userJwt: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses: {'200': {description: Account locked and history recorded}}
+  /admin/users/{id}/unlock:
+    post:
+      security: [{userJwt: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: integer, format: int64}}]
+      responses: {'200': {description: Account unlocked and history recorded}}
+  /notifications:
+    get: {security: [{userJwt: []}], responses: {'200': {description: Customer notification page}}}
+  /admin/notifications:
+    get: {security: [{userJwt: []}], responses: {'200': {description: Filtered notification page}}}
   /internal/v1/skus/checkout-items:
     post:
       security: [{serviceJwt: []}, {userJwt: []}]

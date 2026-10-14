@@ -15,3 +15,7 @@ invariants after each recovery.
 
 Required final SQL invariants: `on_hand >= 0`, `reserved >= 0`, `reserved <= on_hand`, one ACTIVE
 reservation per pending order, no duplicate processed-event key, and no order with two accepted payments.
+
+Use `compose-chaos.ps1 -Dependency <name>` to stop and restart one dependency. Pass
+`-DuringFailureProbe` and `-AfterRecoveryProbe` script blocks to create the workload and assert recovery;
+the helper always restarts the selected dependency in `finally`.
