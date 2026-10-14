@@ -7,24 +7,23 @@ import com.ecommerce.order.clients.IdentityCheckoutContext;
 import com.ecommerce.order.clients.IdentityCheckoutContextRequest;
 import com.ecommerce.order.clients.IdentityClient;
 import com.ecommerce.order.exceptions.CatalogUnavailableException;
-import com.ecommerce.order.exceptions.IdentityUnavailableException;
 import com.ecommerce.order.exceptions.IdempotencyKeyConflictException;
+import com.ecommerce.order.exceptions.IdentityUnavailableException;
 import com.ecommerce.order.exceptions.OrderNotFoundException;
 import com.ecommerce.order.exceptions.PriceChangedException;
+import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderItem;
+import com.ecommerce.order.models.entities.OrderStatusHistory;
 import com.ecommerce.order.models.entities.PaymentEventHistory;
 import com.ecommerce.order.models.entities.PaymentEventResult;
-import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.repositories.OrderRepository;
-import com.ecommerce.order.repositories.PaymentEventHistoryRepository;
 import com.ecommerce.order.repositories.OrderStatusHistoryRepository;
-import com.ecommerce.order.models.entities.OrderStatusHistory;
+import com.ecommerce.order.repositories.PaymentEventHistoryRepository;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -35,17 +34,19 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
 
 @Service
 public class OrderService {
   public record CheckoutResult(Order order, boolean replayed) {}
 
-  private final OrderRepository ordersRepository;
+  private final OrderRepository orderRepository;
   private final CartService cartService;
   private final InventoryService inventoryService;
   private final OutboxEventService outboxEventService;
@@ -57,7 +58,7 @@ public class OrderService {
 
   @Autowired
   public OrderService(
-      OrderRepository ordersRepository,
+      OrderRepository orderRepository,
       CartService cartService,
       InventoryService inventoryService,
       OutboxEventService outboxEventService,
@@ -66,7 +67,7 @@ public class OrderService {
       PaymentEventHistoryRepository paymentEventHistoryRepository,
       OrderStatusHistoryRepository orderStatusHistoryRepository,
       @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
-    this.ordersRepository = ordersRepository;
+    this.orderRepository = orderRepository;
     this.cartService = cartService;
     this.inventoryService = inventoryService;
     this.outboxEventService = outboxEventService;
@@ -81,7 +82,7 @@ public class OrderService {
   }
 
   public OrderService(
-      OrderRepository ordersRepository,
+      OrderRepository orderRepository,
       CartService cartService,
       InventoryService inventoryService,
       OutboxEventService outboxEventService,
@@ -89,7 +90,7 @@ public class OrderService {
       IdentityClient identityClient,
       long paymentTimeoutSeconds) {
     this(
-        ordersRepository,
+        orderRepository,
         cartService,
         inventoryService,
         outboxEventService,
@@ -101,7 +102,7 @@ public class OrderService {
   }
 
   public OrderService(
-      OrderRepository ordersRepository,
+      OrderRepository orderRepository,
       CartService cartService,
       InventoryService inventoryService,
       OutboxEventService outboxEventService,
@@ -109,17 +110,23 @@ public class OrderService {
       IdentityClient identityClient,
       PaymentEventHistoryRepository paymentEventHistoryRepository,
       long paymentTimeoutSeconds) {
-    this(ordersRepository, cartService, inventoryService, outboxEventService, catalogClient,
-        identityClient, paymentEventHistoryRepository, null, paymentTimeoutSeconds);
+    this(
+        orderRepository,
+        cartService,
+        inventoryService,
+        outboxEventService,
+        catalogClient,
+        identityClient,
+        paymentEventHistoryRepository,
+        null,
+        paymentTimeoutSeconds);
   }
 
-  @Transactional
   public Order createFromCart(Long userId) {
     Cart cart = cartService.getOrCreate(userId);
     return createFromCart(cart, userId, null, null, null, null, null, null);
   }
 
-  @Transactional
   public Order createFromCart(
       Long userId, CartDtos.CheckoutRequest checkoutRequest, String authorization) {
     Cart cart = cartService.getOrCreate(userId);
@@ -134,7 +141,6 @@ public class OrderService {
         null);
   }
 
-  @Transactional
   public CheckoutResult checkout(
       Long userId,
       CartDtos.CheckoutRequest checkoutRequest,
@@ -143,7 +149,7 @@ public class OrderService {
     String normalizedKey = normalizeIdempotencyKey(idempotencyKey);
     String requestHash = checkoutHash(checkoutRequest);
     Order existing =
-        ordersRepository.findByUserIdAndIdempotencyKey(userId, normalizedKey).orElse(null);
+        orderRepository.findByUserIdAndIdempotencyKey(userId, normalizedKey).orElse(null);
     if (existing != null) {
       return replayOrReject(existing, requestHash);
     }
@@ -164,7 +170,7 @@ public class OrderService {
     }
 
     Cart cart = cartService.getForCheckout(userId);
-    existing = ordersRepository.findByUserIdAndIdempotencyKey(userId, normalizedKey).orElse(null);
+    existing = orderRepository.findByUserIdAndIdempotencyKey(userId, normalizedKey).orElse(null);
     if (existing != null) {
       return replayOrReject(existing, requestHash);
     }
@@ -202,10 +208,7 @@ public class OrderService {
         cart.getItems().stream()
             .collect(
                 Collectors.toMap(
-                    CartItem::getSkuId,
-                    CartItem::getQuantity,
-                    Integer::sum,
-                    LinkedHashMap::new));
+                    CartItem::getSkuId, CartItem::getQuantity, Integer::sum, LinkedHashMap::new));
     List<Long> skuIds = cart.getItems().stream().map(CartItem::getSkuId).distinct().toList();
     Map<Long, CartDtos.CheckoutItem> expectedBySku = new LinkedHashMap<>();
     if (expectedItems != null) {
@@ -231,8 +234,7 @@ public class OrderService {
           expectedBySku.entrySet().stream()
               .anyMatch(
                   entry ->
-                      !Objects.equals(
-                          entry.getValue().quantity(), quantities.get(entry.getKey())));
+                      !Objects.equals(entry.getValue().quantity(), quantities.get(entry.getKey())));
       if (differentSkuSet || differentQuantity) {
         throw new IllegalStateException("CART_CHANGED");
       }
@@ -248,8 +250,7 @@ public class OrderService {
       throw new CatalogUnavailableException();
     }
     Map<Long, CatalogCheckoutItem> catalogBySku =
-        catalogItems.stream()
-            .collect(Collectors.toMap(CatalogCheckoutItem::skuId, item -> item));
+        catalogItems.stream().collect(Collectors.toMap(CatalogCheckoutItem::skuId, item -> item));
     if (catalogBySku.size() != skuIds.size()
         || catalogBySku.values().stream().anyMatch(item -> !item.sellable())) {
       throw new IllegalStateException("SKU_NOT_SELLABLE");
@@ -264,8 +265,6 @@ public class OrderService {
         throw new PriceChangedException();
       }
     }
-    inventoryService.reserve(quantities);
-
     long totalAmount =
         cart.getItems().stream()
             .mapToLong(item -> catalogBySku.get(item.getSkuId()).unitPrice() * item.getQuantity())
@@ -294,11 +293,20 @@ public class OrderService {
                         item.getSkuId(),
                         item.getQuantity(),
                         catalogBySku.get(item.getSkuId()).unitPrice())));
-    cartService.clear(userId, cart.getVersion());
-    Order saved = ordersRepository.save(order);
-    recordStatus(saved, "CHECKOUT", null);
-    outboxEventService.enqueueOrderCreated(saved);
-    return saved;
+    UUID operationId =
+        operationId(idempotencyKey == null ? UUID.randomUUID().toString() : idempotencyKey);
+    return executeInventoryCommand(
+        quantities,
+        () -> {
+          Order savedOrder = orderRepository.save(order);
+          orderRepository.flush();
+          inventoryService.reserveInCurrentTransaction(
+              savedOrder.getId(), quantities, savedOrder.getPaymentDueAt(), operationId);
+          cartService.clear(userId, cart.getVersion());
+          recordStatus(savedOrder, "CHECKOUT", null);
+          outboxEventService.enqueueOrderCreated(savedOrder);
+          return savedOrder;
+        });
   }
 
   private CheckoutResult replayOrReject(Order existing, String requestHash) {
@@ -327,13 +335,7 @@ public class OrderService {
             + "|"
             + request.expectedItems().stream()
                 .sorted(Comparator.comparing(CartDtos.CheckoutItem::skuId))
-                .map(
-                    item ->
-                        item.skuId()
-                            + ":"
-                            + item.quantity()
-                            + ":"
-                            + item.expectedUnitPrice())
+                .map(item -> item.skuId() + ":" + item.quantity() + ":" + item.expectedUnitPrice())
                 .collect(Collectors.joining(";"));
     try {
       return HexFormat.of()
@@ -345,125 +347,190 @@ public class OrderService {
     }
   }
 
+  private UUID operationId(String stableValue) {
+    return UUID.nameUUIDFromBytes(stableValue.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private <T> T executeInventoryCommand(
+      Map<Long, Integer> quantities, java.util.function.Supplier<T> action) {
+    T result = inventoryService.executeCommand(quantities, action);
+    return result == null ? action.get() : result;
+  }
+
   @Transactional
   public List<Order> listByUser(Long userId) {
-    return ordersRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
   }
 
   @Transactional
   public Order getByUser(Long userId, Long orderId) {
-    return ordersRepository
+    return orderRepository
         .findByIdAndUserId(orderId, userId)
         .orElseThrow(() -> new OrderNotFoundException(orderId));
   }
 
-  @Transactional
   public Order cancel(Long userId, Long orderId) {
     Order owned = getByUser(userId, orderId);
-    Order order = getForUpdate(owned.getId());
-    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CANCELLED) return order;
-    if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
-      throw new IllegalStateException("INVALID_STATE_TRANSITION");
-    }
-    Map<Long, Integer> quantities =
-        order.getItems().stream()
-            .collect(
-                Collectors.toMap(
-                    item -> item.getSkuId(),
-                    item -> item.getQuantity(),
-                    Integer::sum,
-                    LinkedHashMap::new));
-    inventoryService.release(quantities);
-    if (!order.getPaymentDueAt().isAfter(Instant.now())) order.markPaymentExpired();
-    else order.cancel();
-    Order saved = ordersRepository.save(order);
-    recordStatus(saved, "CUSTOMER_CANCEL", saved.getCancellationReason());
-    outboxEventService.enqueueOrderCancelled(saved);
-    return saved;
+    Map<Long, Integer> quantities = quantities(owned);
+    return executeInventoryCommand(
+        quantities,
+        () -> {
+          Order order = getForUpdate(owned.getId());
+          if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CANCELLED) {
+            return order;
+          }
+          if (order.getStatus()
+              != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
+            throw new IllegalStateException("INVALID_STATE_TRANSITION");
+          }
+          String cancellationReason =
+              order.getPaymentDueAt().isAfter(Instant.now())
+                  ? "CUSTOMER_CANCELLED"
+                  : "PAYMENT_EXPIRED";
+          inventoryService.releaseInCurrentTransaction(
+              order.getId(),
+              cancellationReason,
+              operationId("cancel:" + order.getId() + ":" + cancellationReason));
+          if ("PAYMENT_EXPIRED".equals(cancellationReason)) {
+            order.markPaymentExpired();
+          } else {
+            order.cancel();
+          }
+          Order savedOrder = orderRepository.save(order);
+          recordStatus(savedOrder, "CUSTOMER_CANCEL", savedOrder.getCancellationReason());
+          outboxEventService.enqueueOrderCancelled(savedOrder);
+          return savedOrder;
+        });
   }
 
-  @Transactional
   public Order handlePaymentSucceeded(PaymentEvent event) {
-    Order order = getForUpdate(event.orderId());
-    if (isDuplicate(event)) {
-      return order;
-    }
-    String invalidReason = validatePayment(event, order);
-    if (invalidReason != null) {
-      rejectPayment(order, event, invalidReason);
-      return ordersRepository.save(order);
-    }
-    inventoryService.finalizeReservation(quantities(order));
-    order.confirm(event.paymentId());
-    PaymentEventHistory history =
-        new PaymentEventHistory(
-            event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.ACCEPTED, "accepted");
-    paymentEventHistoryRepository.save(history);
-    Order saved = ordersRepository.save(order);
-    recordStatus(saved, "PAYMENT_SUCCEEDED", null);
-    outboxEventService.enqueueOrderConfirmed(saved);
-    return saved;
+    Order orderSnapshot =
+        orderRepository
+            .findWithItemsById(event.orderId())
+            .orElseGet(() -> getForUpdate(event.orderId()));
+    return executeInventoryCommand(
+        quantities(orderSnapshot),
+        () -> {
+          Order order = getForUpdate(event.orderId());
+          if (isDuplicate(event)) {
+            return order;
+          }
+          String invalidReason = validatePayment(event, order);
+          if (invalidReason != null) {
+            rejectPayment(order, event, invalidReason);
+            return orderRepository.save(order);
+          }
+          inventoryService.commitInCurrentTransaction(
+              event.orderId(), event.eventId(), operationId(event.eventId()));
+          order.confirm(event.paymentId());
+          paymentEventHistoryRepository.save(
+              new PaymentEventHistory(
+                  event.eventId(),
+                  event.paymentId(),
+                  event.orderId(),
+                  PaymentEventResult.ACCEPTED,
+                  "accepted"));
+          Order savedOrder = orderRepository.save(order);
+          recordStatus(savedOrder, "PAYMENT_SUCCEEDED", null);
+          outboxEventService.enqueueOrderConfirmed(savedOrder);
+          return savedOrder;
+        });
   }
 
-  @Transactional
   public Order handlePaymentFailed(PaymentEvent event) {
-    Order order = getForUpdate(event.orderId());
-    if (isDuplicate(event)) {
-      return order;
-    }
-    String invalidReason = validatePayment(event, order);
-    if (invalidReason != null) {
-      rejectPayment(order, event, invalidReason);
-      return ordersRepository.save(order);
-    }
-    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
-      inventoryService.release(quantities(order));
-      order.markPaymentFailed();
-    }
-    paymentEventHistoryRepository.save(
-        new PaymentEventHistory(
-            event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.FAILED,
-            event.failureReason() == null ? "payment_failed" : event.failureReason()));
-    Order saved = ordersRepository.save(order);
-    if (saved.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CANCELLED) {
-      recordStatus(saved, "PAYMENT_FAILED", saved.getCancellationReason());
-      outboxEventService.enqueueOrderCancelled(saved);
-    }
-    return saved;
+    Order orderSnapshot =
+        orderRepository
+            .findWithItemsById(event.orderId())
+            .orElseGet(() -> getForUpdate(event.orderId()));
+    return executeInventoryCommand(
+        quantities(orderSnapshot),
+        () -> {
+          Order order = getForUpdate(event.orderId());
+          if (isDuplicate(event)) {
+            return order;
+          }
+          String invalidReason = validatePayment(event, order);
+          if (invalidReason != null) {
+            rejectPayment(order, event, invalidReason);
+            return orderRepository.save(order);
+          }
+          if (order.getStatus()
+              == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
+            inventoryService.releaseInCurrentTransaction(
+                event.orderId(), "PAYMENT_FAILED", operationId(event.eventId()));
+            order.markPaymentFailed();
+          }
+          paymentEventHistoryRepository.save(
+              new PaymentEventHistory(
+                  event.eventId(),
+                  event.paymentId(),
+                  event.orderId(),
+                  PaymentEventResult.FAILED,
+                  event.failureReason() == null ? "payment_failed" : event.failureReason()));
+          Order savedOrder = orderRepository.save(order);
+          if (savedOrder.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CANCELLED) {
+            recordStatus(savedOrder, "PAYMENT_FAILED", savedOrder.getCancellationReason());
+            outboxEventService.enqueueOrderCancelled(savedOrder);
+          }
+          return savedOrder;
+        });
   }
 
-  @Transactional
   public int expirePendingPayments(Instant now) {
-    List<Order> expired =
-        ordersRepository.findExpiredPendingOrders(
+    List<Order> expiredOrders =
+        orderRepository.findExpiredPendingOrders(
             com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT, now);
     int expiredCount = 0;
-    for (Order candidate : expired) {
-      Order order = getForUpdate(candidate.getId());
-      if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT
-          || order.getPaymentDueAt().isAfter(now)) {
-        continue;
+    for (Order candidateOrder : expiredOrders) {
+      Order orderSnapshot =
+          orderRepository.findWithItemsById(candidateOrder.getId()).orElse(candidateOrder);
+      Boolean paymentExpired =
+          executeInventoryCommand(
+              quantities(orderSnapshot),
+              () -> {
+                Order order = getForUpdate(candidateOrder.getId());
+                if (order.getStatus()
+                        != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT
+                    || order.getPaymentDueAt().isAfter(now)) {
+                  return false;
+                }
+                inventoryService.releaseInCurrentTransaction(
+                    order.getId(), "PAYMENT_EXPIRED", operationId("expiry:" + order.getId()));
+                order.markPaymentExpired();
+                Order savedOrder = orderRepository.save(order);
+                recordStatus(savedOrder, "PAYMENT_EXPIRY", savedOrder.getCancellationReason());
+                outboxEventService.enqueueOrderCancelled(savedOrder);
+                return true;
+              });
+      if (Boolean.TRUE.equals(paymentExpired)) {
+        expiredCount++;
       }
-      inventoryService.release(quantities(order));
-      order.markPaymentExpired();
-      Order saved = ordersRepository.save(order);
-      recordStatus(saved, "PAYMENT_EXPIRY", saved.getCancellationReason());
-      outboxEventService.enqueueOrderCancelled(saved);
-      expiredCount++;
     }
     return expiredCount;
   }
 
   private String validatePayment(PaymentEvent event, Order order) {
-    if (event.eventId() == null || event.eventId().isBlank()) return "EVENT_ID_REQUIRED";
-    if (event.paymentId() == null || event.paymentId() <= 0) return "INVALID_PAYMENT_ID";
+    if (event.eventId() == null || event.eventId().isBlank()) {
+      return "EVENT_ID_REQUIRED";
+    }
+    if (event.paymentId() == null || event.paymentId() <= 0) {
+      return "INVALID_PAYMENT_ID";
+    }
     if (order.getId() != null && !Objects.equals(event.orderId(), order.getId())) {
       return "INVALID_ORDER_ID";
     }
-    if (!Objects.equals(event.amount(), order.getTotalAmount())) return "PAYMENT_AMOUNT_MISMATCH";
-    if (!Objects.equals(event.currency(), order.getCurrency())) return "PAYMENT_CURRENCY_MISMATCH";
-    if (!Objects.equals(event.paymentDueAt(), order.getPaymentDueAt())) return "PAYMENT_DUE_AT_MISMATCH";
-    if (!order.getPaymentDueAt().isAfter(Instant.now())) return "PAYMENT_EXPIRED";
+    if (!Objects.equals(event.amount(), order.getTotalAmount())) {
+      return "PAYMENT_AMOUNT_MISMATCH";
+    }
+    if (!Objects.equals(event.currency(), order.getCurrency())) {
+      return "PAYMENT_CURRENCY_MISMATCH";
+    }
+    if (!Objects.equals(event.paymentDueAt(), order.getPaymentDueAt())) {
+      return "PAYMENT_DUE_AT_MISMATCH";
+    }
+    if (!order.getPaymentDueAt().isAfter(Instant.now())) {
+      return "PAYMENT_EXPIRED";
+    }
     if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
       return "ORDER_NOT_PENDING";
     }
@@ -471,21 +538,33 @@ public class OrderService {
   }
 
   private boolean isDuplicate(PaymentEvent event) {
-    return (event.eventId() != null && paymentEventHistoryRepository.existsByEventId(event.eventId()))
+    return (event.eventId() != null
+            && paymentEventHistoryRepository.existsByEventId(event.eventId()))
         || (event.paymentId() != null
             && paymentEventHistoryRepository.existsByPaymentId(event.paymentId()));
   }
 
   private void rejectPayment(Order order, PaymentEvent event, String reason) {
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
-      inventoryService.release(quantities(order));
-      order.markPaymentReview();
+      inventoryService.releaseInCurrentTransaction(
+          event.orderId(), reason, operationId(event.eventId()));
+      if ("PAYMENT_EXPIRED".equals(reason)) {
+        order.markPaymentExpired();
+        outboxEventService.enqueueOrderCancelled(order);
+      } else {
+        order.markPaymentReview();
+      }
       recordStatus(order, "PAYMENT_REJECTED", reason);
     }
     paymentEventHistoryRepository.save(
         new PaymentEventHistory(
-            event.eventId(), event.paymentId(), event.orderId(), PaymentEventResult.REVIEW, reason));
-    outboxEventService.enqueueOrderConfirmationRejected(order, event.paymentId(), rejectionReason(reason));
+            event.eventId(),
+            event.paymentId(),
+            event.orderId(),
+            PaymentEventResult.REVIEW,
+            reason));
+    outboxEventService.enqueueOrderConfirmationRejected(
+        order, event.paymentId(), rejectionReason(reason));
   }
 
   private String rejectionReason(String reason) {
@@ -501,30 +580,34 @@ public class OrderService {
   @Transactional
   public Order ship(Long orderId) {
     Order order = getForUpdate(orderId);
-    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.SHIPPING) return order;
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.SHIPPING) {
+      return order;
+    }
     order.ship();
-    Order saved = ordersRepository.save(order);
-    recordStatus(saved, "ADMIN_SHIP", null);
-    outboxEventService.enqueueOrderShipping(saved);
-    return saved;
+    Order savedOrder = orderRepository.save(order);
+    recordStatus(savedOrder, "ADMIN_SHIP", null);
+    outboxEventService.enqueueOrderShipping(savedOrder);
+    return savedOrder;
   }
 
   @Transactional
   public Order complete(Long orderId) {
     Order order = getForUpdate(orderId);
-    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.COMPLETED) return order;
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.COMPLETED) {
+      return order;
+    }
     order.complete();
-    Order saved = ordersRepository.save(order);
-    recordStatus(saved, "ADMIN_COMPLETE", null);
-    outboxEventService.enqueueOrderCompleted(saved);
-    return saved;
+    Order savedOrder = orderRepository.save(order);
+    recordStatus(savedOrder, "ADMIN_COMPLETE", null);
+    outboxEventService.enqueueOrderCompleted(savedOrder);
+    return savedOrder;
   }
 
   private Order getForUpdate(Long orderId) {
     if (orderId == null) {
       throw new IllegalArgumentException("ORDER_ID_REQUIRED");
     }
-    return ordersRepository
+    return orderRepository
         .findByIdForUpdate(orderId)
         .orElseThrow(() -> new OrderNotFoundException(orderId));
   }
@@ -544,30 +627,38 @@ public class OrderService {
 
   @Transactional
   public List<OrderStatusHistory> historyForAdmin(Long orderId) {
-    if (!ordersRepository.existsById(orderId)) throw new OrderNotFoundException(orderId);
+    if (!orderRepository.existsById(orderId)) {
+      throw new OrderNotFoundException(orderId);
+    }
     return orderStatusHistoryRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
   }
 
   @Transactional
   public Page<Order> listForAdmin(
-      Long userId, com.ecommerce.order.models.entities.OrderStatus status,
-      Instant from, Instant to, Pageable pageable) {
-    return ordersRepository.findForAdmin(userId, status, from, to, pageable);
+      Long userId,
+      com.ecommerce.order.models.entities.OrderStatus status,
+      Instant from,
+      Instant to,
+      Pageable pageable) {
+    return orderRepository.findForAdmin(userId, status, from, to, pageable);
   }
 
   @Transactional
   public Order getForAdmin(Long orderId) {
-    return ordersRepository.findById(orderId)
-        .orElseThrow(() -> new OrderNotFoundException(orderId));
+    return orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
   }
 
   @Transactional
   public OrderReport report(Instant from, Instant to) {
     Map<String, Long> countByStatus = new LinkedHashMap<>();
-    ordersRepository.countByStatus(from, to)
-        .forEach(row -> countByStatus.put(((com.ecommerce.order.models.entities.OrderStatus) row[0]).name(),
-            (Long) row[1]));
-    return new OrderReport(countByStatus, ordersRepository.completedOrderValue(from, to));
+    orderRepository
+        .countByStatus(from, to)
+        .forEach(
+            row ->
+                countByStatus.put(
+                    ((com.ecommerce.order.models.entities.OrderStatus) row[0]).name(),
+                    (Long) row[1]));
+    return new OrderReport(countByStatus, orderRepository.completedOrderValue(from, to));
   }
 
   private void recordStatus(Order order, String source, String reason) {

@@ -4,11 +4,16 @@ import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderItem;
+import com.ecommerce.order.models.entities.OrderStatus;
+import com.ecommerce.order.models.entities.OrderStatusHistory;
 import com.ecommerce.order.services.CartService;
 import com.ecommerce.order.services.InventoryService;
 import com.ecommerce.order.services.OrderService;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -22,11 +27,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import java.time.Instant;
-import com.ecommerce.order.models.entities.OrderStatus;
-import com.ecommerce.order.models.entities.OrderStatusHistory;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -111,7 +111,8 @@ public class OrderController {
   public List<CartDtos.OrderStatusHistoryResponse> orderHistory(
       Authentication authentication, @PathVariable Long orderId) {
     return orderService.historyByUser(userId(authentication), orderId).stream()
-        .map(this::historyResponse).toList();
+        .map(this::historyResponse)
+        .toList();
   }
 
   @PostMapping("/orders/{orderId}/cancel")
@@ -138,8 +139,14 @@ public class OrderController {
       @RequestParam(required = false) Instant to,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return orderService.listForAdmin(userId, status, from, to,
-        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))).map(this::orderResponse);
+    return orderService
+        .listForAdmin(
+            userId,
+            status,
+            from,
+            to,
+            PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
+        .map(this::orderResponse);
   }
 
   @GetMapping("/admin/orders/{orderId}")
@@ -154,15 +161,16 @@ public class OrderController {
 
   @GetMapping("/admin/reports/orders")
   public OrderService.OrderReport orderReport(
-      @RequestParam(required = false) Instant from,
-      @RequestParam(required = false) Instant to) {
+      @RequestParam(required = false) Instant from, @RequestParam(required = false) Instant to) {
     return orderService.report(from, to);
   }
 
   @GetMapping("/inventory/availability")
   public List<CartDtos.InventoryAvailabilityResponse> availability(
       @RequestParam List<Long> skuIds) {
-    if (skuIds.size() > 100) throw new IllegalArgumentException("Chỉ được kiểm tra tối đa 100 SKU");
+    if (skuIds.size() > 100) {
+      throw new IllegalArgumentException("Chỉ được kiểm tra tối đa 100 SKU");
+    }
     if (skuIds.isEmpty() || skuIds.stream().anyMatch(id -> id == null || id <= 0)) {
       throw new IllegalArgumentException("Danh sách SKU phải chứa các ID lớn hơn 0");
     }
@@ -170,20 +178,69 @@ public class OrderController {
   }
 
   @PostMapping("/admin/inventory/{skuId}/initialize")
-  public CartDtos.InventoryResponse initialize(@PathVariable Long skuId) {
-    return toInventory(inventoryService.initialize(skuId));
+  public CartDtos.InventoryResponse initialize(
+      @PathVariable Long skuId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey,
+      Authentication authentication) {
+    return toInventory(inventoryService.initialize(skuId, idempotencyKey, userId(authentication)));
   }
 
   @PostMapping("/admin/inventory/{skuId}/receipts")
   public CartDtos.InventoryResponse receipt(
-      @PathVariable Long skuId, @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
-    return toInventory(inventoryService.receipt(skuId, request));
+      @PathVariable Long skuId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey,
+      Authentication authentication,
+      @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
+    return toInventory(
+        inventoryService.receipt(skuId, request, idempotencyKey, userId(authentication)));
   }
 
   @PostMapping("/admin/inventory/{skuId}/adjustments")
   public CartDtos.InventoryResponse adjustment(
-      @PathVariable Long skuId, @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
-    return toInventory(inventoryService.adjustment(skuId, request));
+      @PathVariable Long skuId,
+      @RequestHeader("Idempotency-Key") String idempotencyKey,
+      Authentication authentication,
+      @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
+    if (request.reason() == null || request.reason().isBlank())
+      throw new IllegalArgumentException("ADJUSTMENT_REASON_REQUIRED");
+    return toInventory(
+        inventoryService.adjustment(skuId, request, idempotencyKey, userId(authentication)));
+  }
+
+  @GetMapping("/admin/inventory")
+  public Page<CartDtos.InventoryResponse> inventory(
+      @RequestParam(required = false) Long skuId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return inventoryService
+        .list(skuId, PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
+        .map(this::toInventory);
+  }
+
+  @GetMapping("/admin/inventory/{skuId}/movements")
+  public Page<CartDtos.StockMovementResponse> movements(
+      @PathVariable Long skuId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return inventoryService
+        .movements(skuId, PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
+        .map(
+            m ->
+                new CartDtos.StockMovementResponse(
+                    m.getId(),
+                    m.getSkuId(),
+                    m.getMovementType().name(),
+                    m.getOnHandDelta(),
+                    m.getReservedDelta(),
+                    m.getOnHandAfter(),
+                    m.getReservedAfter(),
+                    m.getOrderId(),
+                    m.getReservationId(),
+                    m.getActorUserId(),
+                    m.getSourceEventId(),
+                    m.getOperationId(),
+                    m.getReason(),
+                    m.getCreatedAt()));
   }
 
   private Long userId(Authentication authentication) {
@@ -197,19 +254,22 @@ public class OrderController {
         cart.getVersion(),
         cart.getItems().stream()
             .map(
-                i ->
+                cartItem ->
                     new CartDtos.CartResponse.Item(
-                        i.getSkuId(), i.getQuantity(), i.getDisplayedUnitPrice()))
+                        cartItem.getSkuId(),
+                        cartItem.getQuantity(),
+                        cartItem.getDisplayedUnitPrice()))
             .toList());
   }
 
-  private CartDtos.InventoryResponse toInventory(com.ecommerce.order.models.entities.Inventory i) {
+  private CartDtos.InventoryResponse toInventory(
+      com.ecommerce.order.models.entities.Inventory inventory) {
     return new CartDtos.InventoryResponse(
-        i.getSkuId(),
-        i.getOnHand(),
-        i.getReserved(),
-        i.getOnHand() - i.getReserved(),
-        i.getVersion());
+        inventory.getSkuId(),
+        inventory.getOnHand(),
+        inventory.getReserved(),
+        inventory.getOnHand() - inventory.getReserved(),
+        inventory.getVersion());
   }
 
   private CartDtos.OrderResponse orderResponse(Order order) {
@@ -242,7 +302,10 @@ public class OrderController {
 
   private CartDtos.OrderStatusHistoryResponse historyResponse(OrderStatusHistory history) {
     return new CartDtos.OrderStatusHistoryResponse(
-        history.getId(), history.getStatus(), history.getSource(), history.getReason(),
+        history.getId(),
+        history.getStatus(),
+        history.getSource(),
+        history.getReason(),
         history.getCreatedAt());
   }
 }

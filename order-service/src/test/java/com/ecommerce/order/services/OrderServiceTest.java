@@ -11,12 +11,12 @@ import com.ecommerce.order.clients.CatalogCheckoutItem;
 import com.ecommerce.order.clients.CatalogClient;
 import com.ecommerce.order.clients.IdentityCheckoutContext;
 import com.ecommerce.order.clients.IdentityClient;
+import com.ecommerce.order.messaging.events.PaymentEvent;
+import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderStatus;
-import com.ecommerce.order.messaging.events.PaymentEvent;
-import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.repositories.OrderRepository;
 import com.ecommerce.order.repositories.PaymentEventHistoryRepository;
 import java.util.List;
@@ -73,7 +73,7 @@ class OrderServiceTest {
     org.assertj.core.api.Assertions.assertThat(order.getPaymentDueAt())
         .isBetween(
             java.time.Instant.now().plusSeconds(895), java.time.Instant.now().plusSeconds(900));
-    verify(inventoryService).reserve(Map.of(10L, 2));
+    verify(inventoryService).reserveInCurrentTransaction(any(), eq(Map.of(10L, 2)), any(), any());
     verify(outboxEventService).enqueueOrderCreated(any(Order.class));
     verify(cartService).clear(eq(7L), eq(cart.getVersion()));
   }
@@ -90,7 +90,7 @@ class OrderServiceTest {
 
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> orderService.createFromCart(7L))
         .isInstanceOf(com.ecommerce.order.exceptions.PriceChangedException.class);
-    verify(inventoryService, never()).reserve(any());
+    verify(inventoryService, never()).executeCommand(any(), any());
     verify(orderRepository, never()).save(any());
   }
 
@@ -107,7 +107,7 @@ class OrderServiceTest {
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> orderService.createFromCart(7L))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("SKU_NOT_SELLABLE");
-    verify(inventoryService, never()).reserve(any());
+    verify(inventoryService, never()).executeCommand(any(), any());
     verify(orderRepository, never()).save(any());
   }
 
@@ -126,7 +126,13 @@ class OrderServiceTest {
                 7L,
                 "ACTIVE",
                 new IdentityCheckoutContext.AddressSnapshot(
-                    1L, "Nguyễn Văn A", "0900000000", "1 Đường A", "Phường 1", "Quận 1", "TP HCM")));
+                    1L,
+                    "Nguyễn Văn A",
+                    "0900000000",
+                    "1 Đường A",
+                    "Phường 1",
+                    "Quận 1",
+                    "TP HCM")));
     when(catalogClient.getCheckoutItems(any(), any()))
         .thenReturn(
             List.of(
@@ -135,7 +141,8 @@ class OrderServiceTest {
     when(orderRepository.save(any(Order.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    OrderService.CheckoutResult first = orderService.checkout(7L, request, "Bearer token", "checkout-1");
+    OrderService.CheckoutResult first =
+        orderService.checkout(7L, request, "Bearer token", "checkout-1");
     when(orderRepository.findByUserIdAndIdempotencyKey(7L, "checkout-1"))
         .thenReturn(Optional.of(first.order()));
     OrderService.CheckoutResult replay =
@@ -147,7 +154,7 @@ class OrderServiceTest {
         .isEqualTo("TP HCM");
     org.assertj.core.api.Assertions.assertThat(replay.replayed()).isTrue();
     org.assertj.core.api.Assertions.assertThat(replay.order()).isSameAs(first.order());
-    verify(inventoryService).reserve(Map.of(10L, 2));
+    verify(inventoryService).reserveInCurrentTransaction(any(), eq(Map.of(10L, 2)), any(), any());
     verify(cartService).clear(eq(7L), eq(cart.getVersion()));
   }
 
@@ -163,7 +170,7 @@ class OrderServiceTest {
     Order cancelled = orderService.cancel(7L, 3L);
 
     assertEquals("CANCELLED", cancelled.getStatus().name());
-    verify(inventoryService).release(Map.of(10L, 2));
+    verify(inventoryService).releaseInCurrentTransaction(eq(3L), eq("CUSTOMER_CANCELLED"), any());
     verify(outboxEventService).enqueueOrderCancelled(order);
     verify(orderRepository).save(order);
   }
@@ -177,12 +184,21 @@ class OrderServiceTest {
     when(paymentEventHistoryRepository.existsByPaymentId(24L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
-    Order failed = orderServiceWithHistory().handlePaymentFailed(
-        new PaymentEvent("evt-failed", "PaymentFailed", 24L, 3L, 300_000L, "VND",
-            order.getPaymentDueAt(), "provider_declined"));
+    Order failed =
+        orderServiceWithHistory()
+            .handlePaymentFailed(
+                new PaymentEvent(
+                    "evt-failed",
+                    "PaymentFailed",
+                    24L,
+                    3L,
+                    300_000L,
+                    "VND",
+                    order.getPaymentDueAt(),
+                    "provider_declined"));
 
     assertEquals(OrderStatus.CANCELLED, failed.getStatus());
-    verify(inventoryService).release(Map.of(10L, 2));
+    verify(inventoryService).releaseInCurrentTransaction(eq(3L), eq("PAYMENT_FAILED"), any());
     verify(outboxEventService).enqueueOrderCancelled(order);
   }
 
@@ -195,11 +211,21 @@ class OrderServiceTest {
     when(paymentEventHistoryRepository.existsByPaymentId(20L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
-    Order confirmed = orderServiceWithHistory().handlePaymentSucceeded(
-        new PaymentEvent("evt-1", "PaymentSucceeded", 20L, 3L, 300_000L, "VND", order.getPaymentDueAt(), null));
+    Order confirmed =
+        orderServiceWithHistory()
+            .handlePaymentSucceeded(
+                new PaymentEvent(
+                    "evt-1",
+                    "PaymentSucceeded",
+                    20L,
+                    3L,
+                    300_000L,
+                    "VND",
+                    order.getPaymentDueAt(),
+                    null));
 
     assertEquals(OrderStatus.CONFIRMED, confirmed.getStatus());
-    verify(inventoryService).finalizeReservation(Map.of(10L, 2));
+    verify(inventoryService).commitInCurrentTransaction(eq(3L), eq("evt-1"), any());
     verify(outboxEventService).enqueueOrderConfirmed(order);
     verify(paymentEventHistoryRepository).save(any());
   }
@@ -213,12 +239,23 @@ class OrderServiceTest {
     when(paymentEventHistoryRepository.existsByPaymentId(21L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
-    Order reviewed = orderServiceWithHistory().handlePaymentSucceeded(
-        new PaymentEvent("evt-2", "PaymentSucceeded", 21L, 3L, 1L, "VND", order.getPaymentDueAt(), null));
+    Order reviewed =
+        orderServiceWithHistory()
+            .handlePaymentSucceeded(
+                new PaymentEvent(
+                    "evt-2",
+                    "PaymentSucceeded",
+                    21L,
+                    3L,
+                    1L,
+                    "VND",
+                    order.getPaymentDueAt(),
+                    null));
 
     assertEquals(OrderStatus.PAYMENT_REVIEW, reviewed.getStatus());
-    verify(inventoryService).release(Map.of(10L, 2));
-    verify(inventoryService, never()).finalizeReservation(any());
+    verify(inventoryService)
+        .releaseInCurrentTransaction(eq(3L), eq("PAYMENT_AMOUNT_MISMATCH"), any());
+    verify(inventoryService, never()).commitInCurrentTransaction(any(), any(), any());
   }
 
   @Test
@@ -230,12 +267,22 @@ class OrderServiceTest {
     when(paymentEventHistoryRepository.existsByPaymentId(23L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
-    Order reviewed = orderServiceWithHistory().handlePaymentSucceeded(
-        new PaymentEvent("evt-late", "PaymentSucceeded", 23L, 3L, 300_000L, "VND", order.getPaymentDueAt(), null));
+    Order reviewed =
+        orderServiceWithHistory()
+            .handlePaymentSucceeded(
+                new PaymentEvent(
+                    "evt-late",
+                    "PaymentSucceeded",
+                    23L,
+                    3L,
+                    300_000L,
+                    "VND",
+                    order.getPaymentDueAt(),
+                    null));
 
-    assertEquals(OrderStatus.PAYMENT_REVIEW, reviewed.getStatus());
-    verify(inventoryService).release(Map.of(10L, 2));
-    verify(inventoryService, never()).finalizeReservation(any());
+    assertEquals(OrderStatus.CANCELLED, reviewed.getStatus());
+    verify(inventoryService).releaseInCurrentTransaction(eq(3L), eq("PAYMENT_EXPIRED"), any());
+    verify(inventoryService, never()).commitInCurrentTransaction(any(), any(), any());
   }
 
   @Test
@@ -244,10 +291,19 @@ class OrderServiceTest {
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-3")).thenReturn(true);
 
-    orderServiceWithHistory().handlePaymentSucceeded(
-        new PaymentEvent("evt-3", "PaymentSucceeded", 22L, 3L, 300_000L, "VND", order.getPaymentDueAt(), null));
+    orderServiceWithHistory()
+        .handlePaymentSucceeded(
+            new PaymentEvent(
+                "evt-3",
+                "PaymentSucceeded",
+                22L,
+                3L,
+                300_000L,
+                "VND",
+                order.getPaymentDueAt(),
+                null));
 
-    verify(inventoryService, never()).finalizeReservation(any());
+    verify(inventoryService, never()).commitInCurrentTransaction(any(), any(), any());
     verify(paymentEventHistoryRepository, never()).save(any());
   }
 
@@ -266,13 +322,20 @@ class OrderServiceTest {
 
     assertEquals(1, expired);
     assertEquals(OrderStatus.CANCELLED, order.getStatus());
-    verify(inventoryService).release(Map.of(10L, 2));
+    verify(inventoryService).releaseInCurrentTransaction(eq(3L), eq("PAYMENT_EXPIRED"), any());
     verify(outboxEventService).enqueueOrderCancelled(order);
   }
 
   private OrderService orderServiceWithHistory() {
-    return new OrderService(orderRepository, cartService, inventoryService, outboxEventService,
-        catalogClient, identityClient, paymentEventHistoryRepository, 900);
+    return new OrderService(
+        orderRepository,
+        cartService,
+        inventoryService,
+        outboxEventService,
+        catalogClient,
+        identityClient,
+        paymentEventHistoryRepository,
+        900);
   }
 
   private Cart cartWithItem(Long skuId, int quantity, long unitPrice) {

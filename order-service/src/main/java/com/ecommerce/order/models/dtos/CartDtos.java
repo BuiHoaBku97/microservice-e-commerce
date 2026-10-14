@@ -27,6 +27,22 @@ public final class CartDtos {
 
   public record InventoryMutationRequest(@NotNull Integer quantity, String reason, Long version) {}
 
+  public record StockMovementResponse(
+      Long id,
+      Long skuId,
+      String movementType,
+      Integer onHandDelta,
+      Integer reservedDelta,
+      Integer onHandAfter,
+      Integer reservedAfter,
+      Long orderId,
+      Long reservationId,
+      Long actorUserId,
+      String sourceEventId,
+      java.util.UUID operationId,
+      String reason,
+      Instant createdAt) {}
+
   public record OrderResponse(
       Long id,
       Long userId,

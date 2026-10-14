@@ -3,6 +3,8 @@ package com.ecommerce.order.repositories;
 import com.ecommerce.order.models.entities.Inventory;
 import jakarta.persistence.LockModeType;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -14,4 +16,6 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select i from Inventory i where i.skuId in :skuIds")
   List<Inventory> findBySkuIdInForUpdate(@Param("skuIds") List<Long> skuIds);
+
+  Page<Inventory> findBySkuId(Long skuId, Pageable pageable);
 }

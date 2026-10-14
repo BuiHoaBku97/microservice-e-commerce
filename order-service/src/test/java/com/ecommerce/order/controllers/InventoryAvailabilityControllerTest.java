@@ -45,46 +45,54 @@ class InventoryAvailabilityControllerTest {
 
   @DynamicPropertySource
   static void jwtProperties(DynamicPropertyRegistry registry) {
-    registry.add("spring.security.jwt.public-key-base64",
+    registry.add(
+        "spring.security.jwt.public-key-base64",
         () -> Base64.getEncoder().encodeToString(KEY_PAIR.getPublic().getEncoded()));
+    registry.add("app.active-account.enabled", () -> "false");
   }
 
   @Test
   void shouldAllowAnonymousReadWithoutExposingInternalStockFields() throws Exception {
     when(inventoryService.availability(List.of(1L)))
         .thenReturn(List.of(new CartDtos.InventoryAvailabilityResponse(1L, 7)));
-    mockMvc.perform(get("/api/v1/inventory/availability").param("skuIds", "1"))
+    mockMvc
+        .perform(get("/api/v1/inventory/availability").param("skuIds", "1"))
         .andExpect(status().isOk())
         .andExpect(content().json("[{\"skuId\":1,\"available\":7}]", true));
   }
 
   @Test
   void shouldRejectMoreThan100SkuIdsBeforeQueryingInventory() throws Exception {
-    String ids = LongStream.rangeClosed(1, 101).mapToObj(Long::toString)
-        .collect(Collectors.joining(","));
-    mockMvc.perform(get("/api/v1/inventory/availability").param("skuIds", ids))
+    String ids =
+        LongStream.rangeClosed(1, 101).mapToObj(Long::toString).collect(Collectors.joining(","));
+    mockMvc
+        .perform(get("/api/v1/inventory/availability").param("skuIds", ids))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(inventoryService);
   }
 
   @Test
   void shouldRejectNonPositiveSkuId() throws Exception {
-    mockMvc.perform(get("/api/v1/inventory/availability").param("skuIds", "0"))
+    mockMvc
+        .perform(get("/api/v1/inventory/availability").param("skuIds", "0"))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(inventoryService);
   }
 
   @Test
   void shouldRejectAnonymousInventoryWrite() throws Exception {
-    mockMvc.perform(post("/api/v1/admin/inventory/1/initialize"))
+    mockMvc
+        .perform(post("/api/v1/admin/inventory/1/initialize"))
         .andExpect(status().is4xxClientError());
     verifyNoInteractions(inventoryService);
   }
 
   @Test
   void shouldRejectCustomerInventoryWrite() throws Exception {
-    mockMvc.perform(post("/api/v1/admin/inventory/1/initialize")
-            .header("Authorization", "Bearer " + token("CUSTOMER")))
+    mockMvc
+        .perform(
+            post("/api/v1/admin/inventory/1/initialize")
+                .header("Authorization", "Bearer " + token("CUSTOMER")))
         .andExpect(status().isForbidden());
     verifyNoInteractions(inventoryService);
   }
@@ -93,16 +101,24 @@ class InventoryAvailabilityControllerTest {
   void shouldAllowAdminInventoryWrite() throws Exception {
     Inventory inventory = new Inventory();
     inventory.setSkuId(1L);
-    when(inventoryService.initialize(anyLong())).thenReturn(inventory);
-    mockMvc.perform(post("/api/v1/admin/inventory/1/initialize")
-            .header("Authorization", "Bearer " + token("ADMIN")))
+    when(inventoryService.initialize(
+            anyLong(), org.mockito.ArgumentMatchers.anyString(), anyLong()))
+        .thenReturn(inventory);
+    mockMvc
+        .perform(
+            post("/api/v1/admin/inventory/1/initialize")
+                .header("Idempotency-Key", "init-1")
+                .header("Authorization", "Bearer " + token("ADMIN")))
         .andExpect(status().isOk());
   }
 
   private static String token(String scope) {
-    return Jwts.builder().subject("1").claim("scope", scope)
+    return Jwts.builder()
+        .subject("1")
+        .claim("scope", scope)
         .expiration(Date.from(Instant.now().plusSeconds(60)))
-        .signWith(KEY_PAIR.getPrivate(), Jwts.SIG.RS256).compact();
+        .signWith(KEY_PAIR.getPrivate(), Jwts.SIG.RS256)
+        .compact();
   }
 
   private static KeyPair createKeyPair() {
@@ -115,4 +131,3 @@ class InventoryAvailabilityControllerTest {
     }
   }
 }
-
