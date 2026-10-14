@@ -67,6 +67,16 @@ class RouteValidatorTest {
   }
 
   @Test
+  void allowsAdminOnSharedProfileAndNotificationRoutes() {
+    assertTrue(
+        routeValidator.hasRouteAccess(
+            exchange(HttpMethod.GET, "/api/v1/users/me"), adminClaims));
+    assertTrue(
+        routeValidator.hasRouteAccess(
+            exchange(HttpMethod.GET, "/api/v1/notifications"), adminClaims));
+  }
+
+  @Test
   void rejectsMissingScopeOnProtectedRoute() {
     var exchange = exchange(HttpMethod.GET, "/api/v1/orders");
     Claims claimsWithoutScope = Jwts.claims().subject("1").build();

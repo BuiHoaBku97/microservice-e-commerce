@@ -92,6 +92,17 @@ class JwtAuthenticationGlobalFilterTest {
   }
 
   @Test
+  void allowsAdminToAccessOwnProfile() {
+    AtomicBoolean chainCalled = new AtomicBoolean();
+
+    filter
+        .filter(exchange(HttpMethod.GET, "/api/v1/users/me", token("ADMIN")), next(chainCalled))
+        .block();
+
+    assertTrue(chainCalled.get());
+  }
+
+  @Test
   void rejectsTokenFromUnexpectedIssuer() {
     var exchange =
         exchange(

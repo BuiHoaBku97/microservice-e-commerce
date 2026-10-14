@@ -24,6 +24,9 @@ public class RouteValidator {
     if (isAdminRoute(exchange)) {
       return scopes.contains("ADMIN");
     }
+    if (matchesAnyPath(exchange, GatewayRouteRule.CUSTOMER_OR_ADMIN_PATHS)) {
+      return scopes.contains("CUSTOMER") || scopes.contains("ADMIN");
+    }
     if (isCustomerRoute(exchange)) {
       return scopes.contains("CUSTOMER");
     }
@@ -37,8 +40,12 @@ public class RouteValidator {
   }
 
   private boolean isCustomerRoute(ServerWebExchange exchange) {
+    return matchesAnyPath(exchange, GatewayRouteRule.CUSTOMER_PATHS);
+  }
+
+  private boolean matchesAnyPath(ServerWebExchange exchange, java.util.List<String> paths) {
     PathContainer requestPath = PathContainer.parsePath(exchange.getRequest().getPath().value());
-    return GatewayRouteRule.CUSTOMER_PATHS.stream()
+    return paths.stream()
         .map(pathPatternParser::parse)
         .anyMatch(pattern -> pattern.matches(requestPath));
   }
