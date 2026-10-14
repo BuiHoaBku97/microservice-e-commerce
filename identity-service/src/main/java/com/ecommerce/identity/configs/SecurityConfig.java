@@ -26,7 +26,8 @@ public class SecurityConfig {
   SecurityFilterChain securityFilterChain(
       HttpSecurity http,
       JwtAuthenticationFilter jwtFilter,
-      InternalServiceTokenFilter internalServiceTokenFilter)
+      InternalServiceTokenFilter internalServiceTokenFilter,
+      ActiveAccountFilter activeAccountFilter)
       throws Exception {
     return http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(
@@ -47,6 +48,7 @@ public class SecurityConfig {
             jwtFilter,
             org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
                 .class)
+        .addFilterAfter(activeAccountFilter, JwtAuthenticationFilter.class)
         .addFilterAfter(internalServiceTokenFilter, JwtAuthenticationFilter.class)
         .build();
   }
