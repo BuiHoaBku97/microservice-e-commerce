@@ -20,7 +20,7 @@ public class ServiceJwtProvider {
   public ServiceJwtProvider(
       @Value("${app.service-jwt.private-key-base64}") String privateKeyBase64,
       @Value("${app.service-jwt.issuer:ecommerce-internal}") String issuer,
-      @Value("${app.service-jwt.key-id:service-key-1}") String keyId)
+      @Value("${app.service-jwt.key-id:notification-service-key-1}") String keyId)
       throws Exception {
     this.privateKey =
         KeyFactory.getInstance("RSA")

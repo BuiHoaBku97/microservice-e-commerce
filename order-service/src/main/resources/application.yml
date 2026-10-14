@@ -35,7 +35,7 @@ app:
     private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
     issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
     subject: order-service
-    key-id: ${SERVICE_JWT_KEY_ID:service-key-1}
+    key-id: ${SERVICE_JWT_KEY_ID:order-service-key-1}
     ttl-seconds: ${SERVICE_JWT_TTL_SECONDS:60}
   active-account:
     enabled: ${ACTIVE_ACCOUNT_CHECK_ENABLED:true}

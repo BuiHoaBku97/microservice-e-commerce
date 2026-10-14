@@ -15,6 +15,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class InternalServiceTokenFilterTest {
   private static final KeyPair KEYS = keys();
   private static final KeyPair NEXT_KEYS = keys();
+  private static final KeyPair PAYMENT_KEYS = keys();
+  private static final String CURRENT_KID = "order-service-key-1";
 
   @AfterEach
   void clear() {
@@ -27,7 +29,7 @@ class InternalServiceTokenFilterTest {
         .setAuthentication(
             UsernamePasswordAuthenticationToken.authenticated(
                 "7", null, List.of(new SimpleGrantedAuthority("SCOPE_CUSTOMER"))));
-    filter(token("identity-service", "identity.checkout", 60));
+    filter(token(CURRENT_KID, KEYS, "order-service", "identity-service", "identity.checkout", 60));
     assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal())
         .isEqualTo("7");
     assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
@@ -39,9 +41,10 @@ class InternalServiceTokenFilterTest {
   void wrongAudienceScopeAndExpiryNeverGrantInternalScope() throws Exception {
     for (String token :
         List.of(
-            token("catalog-service", "identity.checkout", 60),
-            token("identity-service", "wrong", 60),
-            token("identity-service", "identity.checkout", -1))) {
+            token(CURRENT_KID, KEYS, "order-service", "catalog-service", "identity.checkout", 60),
+            token(CURRENT_KID, KEYS, "order-service", "identity-service", "wrong", 60),
+            token(CURRENT_KID, KEYS, "order-service", "identity-service", "identity.checkout", -1),
+            token(CURRENT_KID, KEYS, "payment-service", "identity-service", "identity.checkout", 60))) {
       SecurityContextHolder.clearContext();
       filter(token);
       assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
@@ -55,14 +58,50 @@ class InternalServiceTokenFilterTest {
             + Base64.getEncoder().encodeToString(NEXT_KEYS.getPublic().getEncoded())
             + ";current="
             + Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded());
-    var filter = new InternalServiceTokenFilter(ring, "ecommerce-internal");
-    filter(filter, token("current", KEYS, "identity-service", "identity.checkout", 60));
+    var filter =
+        new InternalServiceTokenFilter(
+            ring, "current=order-service;next=order-service", "ecommerce-internal");
+    filter(
+        filter,
+        token("current", KEYS, "order-service", "identity-service", "identity.checkout", 60));
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
     SecurityContextHolder.clearContext();
-    filter(filter, token("next", NEXT_KEYS, "identity-service", "identity.checkout", 60));
+    filter(
+        filter,
+        token("next", NEXT_KEYS, "order-service", "identity-service", "identity.checkout", 60));
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
     SecurityContextHolder.clearContext();
-    filter(filter, token("unknown", KEYS, "identity-service", "identity.checkout", 60));
+    filter(
+        filter,
+        token("unknown", KEYS, "order-service", "identity-service", "identity.checkout", 60));
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+  }
+
+  @Test
+  void rejectsAuthorizedPaymentIdentityOnOrderOnlyCheckoutOperation() throws Exception {
+    String ring =
+        CURRENT_KID
+            + "="
+            + Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded())
+            + ";payment-service-key-1="
+            + Base64.getEncoder().encodeToString(PAYMENT_KEYS.getPublic().getEncoded());
+    var filter =
+        new InternalServiceTokenFilter(
+            ring,
+            CURRENT_KID + "=order-service;payment-service-key-1=payment-service",
+            "ecommerce-internal");
+    MockHttpServletResponse response =
+        filter(
+            filter,
+            token(
+                "payment-service-key-1",
+                PAYMENT_KEYS,
+                "payment-service",
+                "identity-service",
+                "identity.checkout",
+                60));
+
+    assertThat(response.getStatus()).isEqualTo(403);
     assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
   }
 
@@ -71,41 +110,36 @@ class InternalServiceTokenFilterTest {
     request.setServletPath("/internal/v1/users/current/checkout-context");
     request.addHeader("X-Service-Authorization", "Bearer " + token);
     new InternalServiceTokenFilter(
-            Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded()), "ecommerce-internal")
+            CURRENT_KID + "=" + Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded()),
+            CURRENT_KID + "=order-service",
+            "ecommerce-internal")
         .doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
   }
 
-  private void filter(InternalServiceTokenFilter filter, String token) throws Exception {
+  private MockHttpServletResponse filter(InternalServiceTokenFilter filter, String token)
+      throws Exception {
     var request = new MockHttpServletRequest("POST", "/internal/v1/users/current/checkout-context");
     request.setServletPath("/internal/v1/users/current/checkout-context");
     request.addHeader("X-Service-Authorization", "Bearer " + token);
-    filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    filter.doFilter(request, response, new MockFilterChain());
+    return response;
   }
 
-  private String token(String audience, String scope, long ttlSeconds) {
-    Instant now = Instant.now();
-    return Jwts.builder()
-        .issuer("ecommerce-internal")
-        .subject("order-service")
-        .audience()
-        .add(audience)
-        .and()
-        .claim("scope", scope)
-        .id(UUID.randomUUID().toString())
-        .issuedAt(Date.from(now))
-        .expiration(Date.from(now.plusSeconds(ttlSeconds)))
-        .signWith(KEYS.getPrivate(), Jwts.SIG.RS256)
-        .compact();
-  }
-
-  private String token(String kid, KeyPair pair, String audience, String scope, long ttlSeconds) {
+  private String token(
+      String kid,
+      KeyPair pair,
+      String subject,
+      String audience,
+      String scope,
+      long ttlSeconds) {
     Instant now = Instant.now();
     return Jwts.builder()
         .header()
         .keyId(kid)
         .and()
         .issuer("ecommerce-internal")
-        .subject("order-service")
+        .subject(subject)
         .audience()
         .add(audience)
         .and()

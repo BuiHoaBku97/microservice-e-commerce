@@ -18,16 +18,22 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class InternalServiceTokenFilter extends OncePerRequestFilter {
   private final Map<String, PublicKey> publicKeys;
+  private final Map<String, String> keyOwners;
   private final String issuer;
+  private static final Set<String> STATUS_CALLERS =
+      Set.of("order-service", "catalog-service", "payment-service", "notification-service");
 
   @Autowired
   public InternalServiceTokenFilter(
-      @Value(
-              "${security.service-jwt.public-keys:${security.service-jwt.public-key-base64:${security.jwt.public-key-base64}}}")
-          String configuredKeyRing,
+      @Value("${security.service-jwt.public-keys}") String configuredKeyRing,
+      @Value("${security.service-jwt.key-owners}") String configuredKeyOwners,
       @Value("${security.service-jwt.issuer:ecommerce-internal}") String issuer)
       throws Exception {
     publicKeys = parseKeys(configuredKeyRing);
+    keyOwners = parseKeyOwners(configuredKeyOwners);
+    if (!publicKeys.keySet().equals(keyOwners.keySet())) {
+      throw new IllegalArgumentException("SERVICE_JWT_KEY_OWNER_MISMATCH");
+    }
     this.issuer = issuer;
   }
 
@@ -45,22 +51,33 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
       return;
     }
     try {
-      Claims claims =
+      var signedJwt =
           Jwts.parser()
               .keyLocator(this::locateKey)
               .requireIssuer(issuer)
               .build()
-              .parseSignedClaims(serviceAuthorizationHeader.substring(7))
-              .getPayload();
+              .parseSignedClaims(serviceAuthorizationHeader.substring(7));
+      Claims claims = signedJwt.getPayload();
+      String keyId = signedJwt.getHeader().getKeyId();
+      String caller = keyOwners.get(keyId);
       String scope = claims.get("scope", String.class);
       String requiredScope =
           request.getServletPath().endsWith("/status") ? "identity.status" : "identity.checkout";
+      if (caller == null || !caller.equals(claims.getSubject())) {
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_IDENTITY");
+        return;
+      }
       if (!claims.getAudience().contains("identity-service")) {
         response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_AUDIENCE");
         return;
       }
       if (scope == null || Arrays.stream(scope.split("\\s+")).noneMatch(requiredScope::equals)) {
         response.sendError(HttpServletResponse.SC_FORBIDDEN, "INSUFFICIENT_SERVICE_SCOPE");
+        return;
+      }
+      if (("identity.checkout".equals(requiredScope) && !"order-service".equals(caller))
+          || ("identity.status".equals(requiredScope) && !STATUS_CALLERS.contains(caller))) {
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, "SERVICE_CALLER_NOT_ALLOWED");
         return;
       }
       var currentAuthentication = SecurityContextHolder.getContext().getAuthentication();
@@ -90,9 +107,6 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
   private PublicKey locateKey(io.jsonwebtoken.Header serviceAuthorizationHeader) {
     String keyId = String.valueOf(serviceAuthorizationHeader.get("kid"));
     PublicKey locatedPublicKey = publicKeys.get(keyId);
-    if (locatedPublicKey == null && publicKeys.size() == 1) {
-      locatedPublicKey = publicKeys.values().iterator().next();
-    }
     if (locatedPublicKey == null) {
       throw new SecurityException("UNKNOWN_SERVICE_KEY");
     }
@@ -112,5 +126,19 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
               .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyBase64))));
     }
     return Map.copyOf(parsedPublicKeys);
+  }
+
+  private Map<String, String> parseKeyOwners(String configuredOwners) {
+    Map<String, String> parsedOwners = new LinkedHashMap<>();
+    for (String entry : configuredOwners.split(";")) {
+      String[] ownerEntryParts = entry.split("=", 2);
+      if (ownerEntryParts.length != 2
+          || ownerEntryParts[0].isBlank()
+          || ownerEntryParts[1].isBlank()) {
+        throw new IllegalArgumentException("INVALID_SERVICE_JWT_KEY_OWNER");
+      }
+      parsedOwners.put(ownerEntryParts[0].trim(), ownerEntryParts[1].trim());
+    }
+    return Map.copyOf(parsedOwners);
   }
 }

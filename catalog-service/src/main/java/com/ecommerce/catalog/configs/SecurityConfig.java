@@ -27,8 +27,11 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/actuator/health")
                     .permitAll()
+                    .requestMatchers(
+                        HttpMethod.POST, "/internal/v1/skus/checkout-items")
+                    .hasAuthority("SCOPE_catalog.checkout")
                     .requestMatchers("/internal/**")
-                    .hasAuthority("SCOPE_INTERNAL_SERVICE")
+                    .denyAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/categories", "/api/v1/products/**")
                     .permitAll()
                     .requestMatchers("/api/v1/admin/**")

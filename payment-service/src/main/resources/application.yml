@@ -41,7 +41,7 @@ app:
   service-jwt:
     private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
     issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
-    key-id: ${SERVICE_JWT_KEY_ID:service-key-1}
+    key-id: ${SERVICE_JWT_KEY_ID:payment-service-key-1}
   active-account:
     identity-url: ${IDENTITY_INTERNAL_URL:http://localhost:8081}
   payment:

@@ -24,7 +24,7 @@ public class ServiceJwtProvider {
           String privateKeyBase64,
       @Value("${app.service-jwt.issuer:ecommerce-internal}") String issuer,
       @Value("${app.service-jwt.subject:order-service}") String subject,
-      @Value("${app.service-jwt.key-id:service-key-1}") String keyId,
+      @Value("${app.service-jwt.key-id:order-service-key-1}") String keyId,
       @Value("${app.service-jwt.ttl-seconds:60}") long ttlSeconds)
       throws Exception {
     this.privateKey =

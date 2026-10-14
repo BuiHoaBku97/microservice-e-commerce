@@ -16,8 +16,8 @@ security:
     private-key-base64: ${JWT_PRIVATE_KEY_BASE64}
     public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
   service-jwt:
-    public-key-base64: ${SERVICE_JWT_PUBLIC_KEY_BASE64}
-    public-keys: ${SERVICE_JWT_PUBLIC_KEYS:${SERVICE_JWT_PUBLIC_KEY_BASE64}}
+    public-keys: ${SERVICE_JWT_PUBLIC_KEYS}
+    key-owners: ${SERVICE_JWT_KEY_OWNERS}
     issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
 app:
   admin-bootstrap:
