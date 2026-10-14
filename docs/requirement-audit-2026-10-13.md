@@ -46,6 +46,8 @@ Verification của đợt triển khai remaining plan:
 
 - `./gradlew test --continue` — xanh toàn bộ 31 task.
 - `docker compose config --quiet` — hợp lệ với các biến khóa bắt buộc.
+- `./gradlew :event-flow-tests:integrationTest` — chưa chạy được vì Testcontainers không kết nối
+  được Docker daemon; hai test dừng ở bước khởi tạo container, trước khi chạy assertion.
 - Compose smoke/load/chaos runtime — chưa chạy vì Docker daemon không hoạt động trên máy hiện tại;
   giữ trạng thái `ACCEPTANCE`, không đánh dấu `DONE`.
 
