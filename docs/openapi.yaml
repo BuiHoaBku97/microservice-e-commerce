@@ -1,0 +1,106 @@
+openapi: 3.1.0
+info:
+  title: E-commerce microservices API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+components:
+  securitySchemes:
+    userJwt: {type: http, scheme: bearer, bearerFormat: JWT}
+    serviceJwt: {type: apiKey, in: header, name: X-Service-Authorization}
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, maxLength: 100}
+  schemas:
+    InventoryMutation:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: {type: integer}
+        reason: {type: string, maxLength: 200}
+        version: {type: integer, format: int64}
+    PaymentSimulation:
+      type: object
+      required: [result]
+      properties:
+        result: {type: string, enum: [SUCCESS, FAILED]}
+paths:
+  /auth/login:
+    post:
+      summary: Login and create a refresh session
+      responses: {'200': {description: Tokens returned}, '401': {description: Invalid credentials}}
+  /auth/refresh:
+    post:
+      summary: Rotate a refresh token while preserving session_id
+      responses: {'200': {description: Rotated tokens}, '401': {description: Token revoked or expired}}
+  /auth/logout:
+    post:
+      summary: Revoke every active refresh token in the session
+      responses: {'204': {description: Session revoked idempotently}}
+  /products/search:
+    get:
+      summary: Search active products in Elasticsearch
+      parameters:
+        - {name: q, in: query, schema: {type: string}}
+        - {name: categoryId, in: query, schema: {type: integer, format: int64}}
+        - {name: minPrice, in: query, schema: {type: integer, format: int64}}
+        - {name: maxPrice, in: query, schema: {type: integer, format: int64}}
+        - {name: sort, in: query, schema: {type: string, enum: [relevance, price_asc, price_desc, newest]}}
+        - {name: page, in: query, schema: {type: integer, minimum: 0}}
+        - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses: {'200': {description: Page of search documents}, '503': {description: Elasticsearch unavailable}}
+  /orders/checkout:
+    post:
+      security: [{userJwt: []}]
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      responses: {'201': {description: Order and reservation created}, '409': {description: Idempotency conflict or insufficient stock}}
+  /admin/inventory:
+    get:
+      security: [{userJwt: []}]
+      parameters:
+        - {name: skuId, in: query, schema: {type: integer, format: int64}}
+        - {name: page, in: query, schema: {type: integer}}
+        - {name: size, in: query, schema: {type: integer, maximum: 100}}
+      responses: {'200': {description: Inventory page}}
+  /admin/inventory/{skuId}/receipts:
+    post:
+      security: [{userJwt: []}]
+      parameters:
+        - {name: skuId, in: path, required: true, schema: {type: integer, format: int64}}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/InventoryMutation'}}}
+      responses: {'200': {description: Stock received}, '409': {description: Key reused with another payload}}
+  /admin/inventory/{skuId}/movements:
+    get:
+      security: [{userJwt: []}]
+      parameters:
+        - {name: skuId, in: path, required: true, schema: {type: integer, format: int64}}
+      responses: {'200': {description: Append-only movement page}}
+  /admin/catalog/reindex:
+    post:
+      security: [{userJwt: []}]
+      responses: {'202': {description: Durable reindex job accepted}, '409': {description: A job is already active}}
+  /admin/catalog/reindex/{jobId}:
+    get:
+      security: [{userJwt: []}]
+      parameters:
+        - {name: jobId, in: path, required: true, schema: {type: integer, format: int64}}
+      responses: {'200': {description: Job status and checkpoint}}
+  /admin/demo/payments/{id}/simulate:
+    post:
+      summary: Demo/local profile only; invokes the authenticated callback pipeline
+      security: [{userJwt: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      requestBody:
+        content: {application/json: {schema: {$ref: '#/components/schemas/PaymentSimulation'}}}
+      responses: {'200': {description: Simulated payment}, '404': {description: Disabled outside demo/local profile}}
+  /internal/v1/skus/checkout-items:
+    post:
+      security: [{serviceJwt: []}, {userJwt: []}]
+      responses: {'200': {description: Verified checkout data}, '401': {description: Invalid service JWT}, '403': {description: Wrong audience or scope}}
