@@ -511,13 +511,19 @@ public class OrderService {
 
   private String validatePayment(PaymentEvent event, Order order) {
     if (event.eventId() == null || event.eventId().isBlank()) {
-      return "EVENT_ID_REQUIRED";
+      throw new IllegalArgumentException("EVENT_ID_REQUIRED");
     }
     if (event.paymentId() == null || event.paymentId() <= 0) {
-      return "INVALID_PAYMENT_ID";
+      throw new IllegalArgumentException("INVALID_PAYMENT_ID");
     }
     if (order.getId() != null && !Objects.equals(event.orderId(), order.getId())) {
-      return "INVALID_ORDER_ID";
+      throw new IllegalArgumentException("INVALID_ORDER_ID");
+    }
+    if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
+      return "ORDER_NOT_PENDING";
+    }
+    if (!order.getPaymentDueAt().isAfter(Instant.now())) {
+      return "PAYMENT_EXPIRED";
     }
     if (!Objects.equals(event.amount(), order.getTotalAmount())) {
       return "PAYMENT_AMOUNT_MISMATCH";
@@ -527,12 +533,6 @@ public class OrderService {
     }
     if (!Objects.equals(event.paymentDueAt(), order.getPaymentDueAt())) {
       return "PAYMENT_DUE_AT_MISMATCH";
-    }
-    if (!order.getPaymentDueAt().isAfter(Instant.now())) {
-      return "PAYMENT_EXPIRED";
-    }
-    if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
-      return "ORDER_NOT_PENDING";
     }
     return null;
   }
@@ -546,15 +546,17 @@ public class OrderService {
 
   private void rejectPayment(Order order, PaymentEvent event, String reason) {
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
+      String cancellationReason =
+          "PAYMENT_EXPIRED".equals(reason) ? "PAYMENT_EXPIRED" : "PAYMENT_MISMATCH";
       inventoryService.releaseInCurrentTransaction(
-          event.orderId(), reason, operationId(event.eventId()));
+          event.orderId(), cancellationReason, operationId(event.eventId()));
       if ("PAYMENT_EXPIRED".equals(reason)) {
         order.markPaymentExpired();
-        outboxEventService.enqueueOrderCancelled(order);
       } else {
-        order.markPaymentReview();
+        order.markPaymentMismatch();
       }
-      recordStatus(order, "PAYMENT_REJECTED", reason);
+      recordStatus(order, "PAYMENT_REJECTED", cancellationReason);
+      outboxEventService.enqueueOrderCancelled(order);
     }
     paymentEventHistoryRepository.save(
         new PaymentEventHistory(
@@ -564,15 +566,29 @@ public class OrderService {
             PaymentEventResult.REVIEW,
             reason));
     outboxEventService.enqueueOrderConfirmationRejected(
-        order, event.paymentId(), rejectionReason(reason));
+        order, event.paymentId(), rejectionReason(order, reason));
   }
 
-  private String rejectionReason(String reason) {
+  private String rejectionReason(Order order, String reason) {
+    if ("PAYMENT_EXPIRED".equals(reason)) {
+      return "PAYMENT_EXPIRED";
+    }
+    if ("PAYMENT_AMOUNT_MISMATCH".equals(reason)
+        || "PAYMENT_CURRENCY_MISMATCH".equals(reason)
+        || "PAYMENT_DUE_AT_MISMATCH".equals(reason)) {
+      return "PAYMENT_MISMATCH";
+    }
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CANCELLED) {
+      return "PAYMENT_EXPIRED".equals(order.getCancellationReason())
+          ? "PAYMENT_EXPIRED"
+          : "ORDER_CANCELLED";
+    }
+    if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.CONFIRMED
+        || order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.SHIPPING
+        || order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.COMPLETED) {
+      return "PAYMENT_ALREADY_ACCEPTED";
+    }
     return switch (reason) {
-      case "PAYMENT_EXPIRED" -> "PAYMENT_EXPIRED";
-      case "ORDER_NOT_PENDING" -> "ORDER_CANCELLED";
-      case "PAYMENT_AMOUNT_MISMATCH", "PAYMENT_CURRENCY_MISMATCH", "PAYMENT_DUE_AT_MISMATCH" ->
-          "PAYMENT_MISMATCH";
       default -> "PAYMENT_MISMATCH";
     };
   }

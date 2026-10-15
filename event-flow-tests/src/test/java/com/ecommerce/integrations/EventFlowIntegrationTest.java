@@ -270,16 +270,18 @@ class EventFlowIntegrationTest {
   }
 
   @Test
-  void payment_shouldReviewWithoutFinalizing_whenLateOrWrongAmount() {
+  void payment_shouldCancelWithoutFinalizing_whenLateOrWrongAmount() {
     for (boolean late : List.of(true, false)) {
       Order order = seed(late ? Instant.now().minusSeconds(60) : Instant.now().plusSeconds(600));
       PaymentEvent event = event(order, late ? 100L : 99L);
       orders.getBean(OrderService.class).handlePaymentSucceeded(event);
       orders.getBean(OrderService.class).handlePaymentSucceeded(event);
-      assertStock(order, "PAYMENT_REVIEW", 10, 0);
+      assertStock(order, "CANCELLED", 10, 0);
       assertThat(count(orders, "SELECT count(*) FROM payment_event_history WHERE order_id=?", order.getId()))
           .isEqualTo(1);
       assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderConfirmationRejected'",
+          order.getId())).isEqualTo(1);
+      assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderCancelled'",
           order.getId())).isEqualTo(1);
     }
   }

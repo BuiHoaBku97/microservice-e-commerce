@@ -90,9 +90,8 @@ public class PaymentService {
         || !payment.getCurrency().equals(request.currency())) throw new IllegalStateException("CALLBACK_MISMATCH");
     callbackRepository.save(new PaymentCallback(request.providerEventId(), hash, payment.getId()));
     if (request.result() == PaymentCallbackRequest.Result.SUCCESS) {
-      boolean firstReceipt = payment.getFundsStatus() == com.ecommerce.payment.models.entities.FundsStatus.NOT_RECEIVED;
-      if (firstReceipt) {
-        payment.receive(request.providerTransactionId(), request.paidAt());
+      boolean receivedNow = payment.receive(request.providerTransactionId(), request.paidAt());
+      if (receivedNow) {
         paymentEventService.enqueuePaymentResult(payment);
         historyRepository.save(new PaymentStatusHistory(payment, "PROVIDER_CALLBACK", "SUCCESS"));
       }

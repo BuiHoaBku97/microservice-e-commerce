@@ -10,7 +10,7 @@
 - Catalog: API quản trị Category/Product/SKU, optimistic version, unique variant, trạng thái bán,
   ảnh mặc định, lịch sử giá và cache Product bằng Redis với TTL/fallback PostgreSQL.
 - Order: trạng thái `PENDING_PAYMENT -> CONFIRMED -> SHIPPING -> COMPLETED`, nhánh
-  `CANCELLED/PAYMENT_REVIEW`, hết hạn tại đúng deadline, history, admin list/detail/ship/complete/report.
+  `CANCELLED`, hết hạn tại đúng deadline, history, admin list/detail/ship/complete/report.
 - Payment: giao dịch khởi tạo PENDING, callback HMAC trên raw body, cửa sổ timestamp,
   callback idempotency, callback race, tách funds/order acceptance, history và report quản trị.
 - Notification: ghi PENDING theo event, worker giao demo, retry metadata, delivery attempts,

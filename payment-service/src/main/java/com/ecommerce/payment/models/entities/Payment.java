@@ -97,14 +97,27 @@ public class Payment {
     failureReason = null;
   }
 
-  public void receive(String providerTransactionId, Instant paidAt) {
+  public boolean receive(String providerTransactionId, Instant paidAt) {
+    if (fundsStatus == FundsStatus.RECEIVED) return false;
+    PaymentStatus previousStatus = status;
+    PaymentStatus nextStatus;
+    if (orderAcceptance == OrderAcceptance.REJECTED
+        || previousStatus == PaymentStatus.FAILED
+        || previousStatus == PaymentStatus.EXPIRED
+        || previousStatus == PaymentStatus.CANCELLED) {
+      nextStatus = PaymentStatus.REQUIRES_REVIEW;
+    } else if (previousStatus == PaymentStatus.PENDING) {
+      nextStatus = PaymentStatus.SUCCESS;
+    } else {
+      throw new IllegalStateException("INVALID_PAYMENT_STATE");
+    }
     fundsStatus = FundsStatus.RECEIVED;
     this.providerTransactionId = providerTransactionId;
     this.providerReference = providerTransactionId;
     this.paidAt = paidAt == null ? Instant.now() : paidAt;
-    status = orderAcceptance == OrderAcceptance.REJECTED
-        ? PaymentStatus.REQUIRES_REVIEW : PaymentStatus.SUCCESS;
+    status = nextStatus;
     failureReason = null;
+    return true;
   }
 
   public void fail(String reason) {

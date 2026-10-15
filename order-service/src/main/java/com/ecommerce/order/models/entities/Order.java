@@ -155,9 +155,10 @@ public class Order {
     }
   }
 
-  public void markPaymentReview() {
+  public void markPaymentMismatch() {
     if (status == OrderStatus.PENDING_PAYMENT) {
-      status = OrderStatus.PAYMENT_REVIEW;
+      status = OrderStatus.CANCELLED;
+      cancellationReason = "PAYMENT_MISMATCH";
     }
   }
 

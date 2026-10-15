@@ -138,6 +138,28 @@ class PaymentServiceTest {
     verify(paymentEventService, times(0)).enqueuePaymentResult(any());
   }
 
+  @Test
+  void callback_shouldRequireReviewWhenSuccessArrivesAfterFailure() throws Exception {
+    Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
+    ReflectionTestUtils.setField(payment, "id", 30L);
+    payment.fail("PROVIDER_FAILED");
+    PaymentCallbackRequest callback = new PaymentCallbackRequest(
+        "provider-event-after-failure", "transaction-after-failure", 30L, 10L,
+        PaymentCallbackRequest.Result.SUCCESS, 100_000L, "VND", Instant.now());
+    String rawBody = "{\"providerEventId\":\"provider-event-after-failure\"}";
+    String timestamp = Long.toString(Instant.now().getEpochSecond());
+    when(callbackRepository.findByProviderEventId("provider-event-after-failure"))
+        .thenReturn(Optional.empty());
+    when(paymentRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(payment));
+    when(paymentRepository.save(payment)).thenReturn(payment);
+
+    Payment result = service.callback(callback, rawBody, timestamp, sign(timestamp, rawBody));
+
+    assertThat(result.getStatus()).isEqualTo(PaymentStatus.REQUIRES_REVIEW);
+    assertThat(result.getFundsStatus()).isEqualTo(FundsStatus.RECEIVED);
+    verify(paymentEventService).enqueuePaymentResult(payment);
+  }
+
   private String sign(String timestamp, String body) throws Exception {
     Mac mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec("test-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));

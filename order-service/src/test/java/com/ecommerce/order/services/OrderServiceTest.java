@@ -231,7 +231,7 @@ class OrderServiceTest {
   }
 
   @Test
-  void handlePaymentSucceeded_shouldReviewAndNeverFinalizeWhenAmountIsWrong() {
+  void handlePaymentSucceeded_shouldCancelAndReleaseWhenAmountIsWrong() {
     Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
@@ -252,10 +252,14 @@ class OrderServiceTest {
                     order.getPaymentDueAt(),
                     null));
 
-    assertEquals(OrderStatus.PAYMENT_REVIEW, reviewed.getStatus());
+    assertEquals(OrderStatus.CANCELLED, reviewed.getStatus());
+    assertEquals("PAYMENT_MISMATCH", reviewed.getCancellationReason());
     verify(inventoryService)
-        .releaseInCurrentTransaction(eq(3L), eq("PAYMENT_AMOUNT_MISMATCH"), any());
+        .releaseInCurrentTransaction(eq(3L), eq("PAYMENT_MISMATCH"), any());
     verify(inventoryService, never()).commitInCurrentTransaction(any(), any(), any());
+    verify(outboxEventService).enqueueOrderCancelled(order);
+    verify(outboxEventService)
+        .enqueueOrderConfirmationRejected(order, 21L, "PAYMENT_MISMATCH");
   }
 
   @Test
