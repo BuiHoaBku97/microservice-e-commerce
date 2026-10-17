@@ -201,8 +201,6 @@ public class OrderController {
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       Authentication authentication,
       @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
-    if (request.reason() == null || request.reason().isBlank())
-      throw new IllegalArgumentException("ADJUSTMENT_REASON_REQUIRED");
     return toInventory(
         inventoryService.adjustment(skuId, request, idempotencyKey, userId(authentication)));
   }

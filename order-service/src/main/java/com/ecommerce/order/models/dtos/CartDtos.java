@@ -4,7 +4,9 @@ import com.ecommerce.order.models.entities.OrderStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 
@@ -25,7 +27,8 @@ public final class CartDtos {
 
   public record InventoryAvailabilityResponse(Long skuId, Integer available) {}
 
-  public record InventoryMutationRequest(@NotNull Integer quantity, String reason, Long version) {}
+  public record InventoryMutationRequest(
+      @NotNull Integer quantity, @NotBlank @Size(max = 200) String reason, Long version) {}
 
   public record StockMovementResponse(
       Long id,

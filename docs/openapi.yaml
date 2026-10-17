@@ -17,7 +17,7 @@ components:
   schemas:
     InventoryMutation:
       type: object
-      required: [quantity]
+      required: [quantity, reason]
       properties:
         quantity: {type: integer}
         reason: {type: string, maxLength: 200}
