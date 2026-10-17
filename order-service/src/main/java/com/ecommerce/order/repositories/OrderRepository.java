@@ -31,10 +31,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
   Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
   @Query(
-      "select o from Order o where o.status = :status and o.paymentDueAt <= :now order by"
-          + " o.paymentDueAt")
-  List<Order> findExpiredPendingOrders(
-      @Param("status") OrderStatus status, @Param("now") Instant now);
+      value =
+          "SELECT * FROM orders WHERE status = 'PENDING_PAYMENT'"
+              + " AND payment_due_at <= clock_timestamp() ORDER BY payment_due_at",
+      nativeQuery = true)
+  List<Order> findExpiredPendingOrders();
 
   @Query(
       """

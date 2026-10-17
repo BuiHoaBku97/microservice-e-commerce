@@ -325,7 +325,7 @@ class EventFlowIntegrationTest {
   @Test
   void payment_shouldNotReleaseTwice_whenCallbackArrivesAfterExpiry() {
     Order order = seed(Instant.now().minusSeconds(60));
-    orders.getBean(OrderService.class).expirePendingPayments(Instant.now());
+    orders.getBean(OrderService.class).expirePendingPayments();
     PaymentEvent event = event(order, 100L);
     orders.getBean(OrderService.class).handlePaymentSucceeded(event);
     orders.getBean(OrderService.class).handlePaymentSucceeded(event);
@@ -336,6 +336,58 @@ class EventFlowIntegrationTest {
         order.getId())).isEqualTo(1);
     assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderConfirmed'",
         order.getId())).isZero();
+  }
+
+  @Test
+  void payment_shouldExpire_whenTransactionWaitsOnOrderLockPastDeadline() throws Exception {
+    Instant due =
+        jdbc(orders)
+            .queryForObject(
+                "SELECT clock_timestamp() + interval '2 seconds'",
+                (resultSet, rowNumber) -> resultSet.getTimestamp(1).toInstant());
+    Order order = seed(due);
+    CountDownLatch orderLocked = new CountDownLatch(1);
+    CountDownLatch releaseLock = new CountDownLatch(1);
+    var executor = Executors.newFixedThreadPool(2);
+
+    try {
+      var lockHolder =
+          executor.submit(
+              () ->
+                  tx()
+                      .executeWithoutResult(
+                          status -> {
+                            orders
+                                .getBean(OrderRepository.class)
+                                .findByIdForUpdate(order.getId())
+                                .orElseThrow();
+                            orderLocked.countDown();
+                            try {
+                              if (!releaseLock.await(10, TimeUnit.SECONDS)) {
+                                throw new IllegalStateException("Timed out while holding order lock");
+                              }
+                            } catch (InterruptedException exception) {
+                              Thread.currentThread().interrupt();
+                              throw new IllegalStateException(exception);
+                            }
+                          }));
+      assertThat(orderLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+      var paymentResult =
+          executor.submit(
+              () -> orders.getBean(OrderService.class).handlePaymentSucceeded(event(order, 100L)));
+      Thread.sleep(2_500);
+      releaseLock.countDown();
+      lockHolder.get(10, TimeUnit.SECONDS);
+      Order result = paymentResult.get(10, TimeUnit.SECONDS);
+
+      assertThat(result.getStatus().name()).isEqualTo("CANCELLED");
+      assertThat(result.getCancellationReason()).isEqualTo("PAYMENT_EXPIRED");
+      assertStock(order, "CANCELLED", 10, 0);
+    } finally {
+      releaseLock.countDown();
+      executor.shutdownNow();
+    }
   }
 
   @Test

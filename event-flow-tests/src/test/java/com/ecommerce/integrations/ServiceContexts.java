@@ -40,6 +40,7 @@ final class ServiceContexts {
 
   @Configuration(proxyBeanMethods = false)
   @Import({Infrastructure.class, com.ecommerce.order.services.OrderService.class,
+      com.ecommerce.order.services.DatabaseClock.class,
       com.ecommerce.order.services.InventoryService.class,
       com.ecommerce.order.services.OutboxEventService.class,
       com.ecommerce.order.messaging.publishers.OutboxPublisher.class,

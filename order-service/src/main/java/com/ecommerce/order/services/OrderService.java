@@ -52,6 +52,7 @@ public class OrderService {
   private final OutboxEventService outboxEventService;
   private final CatalogClient catalogClient;
   private final IdentityClient identityClient;
+  private final DatabaseClock databaseClock;
   private final long paymentTimeoutSeconds;
   private final PaymentEventHistoryRepository paymentEventHistoryRepository;
   private final OrderStatusHistoryRepository orderStatusHistoryRepository;
@@ -64,6 +65,7 @@ public class OrderService {
       OutboxEventService outboxEventService,
       CatalogClient catalogClient,
       IdentityClient identityClient,
+      DatabaseClock databaseClock,
       PaymentEventHistoryRepository paymentEventHistoryRepository,
       OrderStatusHistoryRepository orderStatusHistoryRepository,
       @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
@@ -73,53 +75,13 @@ public class OrderService {
     this.outboxEventService = outboxEventService;
     this.catalogClient = catalogClient;
     this.identityClient = identityClient;
+    this.databaseClock = databaseClock;
     this.paymentEventHistoryRepository = paymentEventHistoryRepository;
     this.orderStatusHistoryRepository = orderStatusHistoryRepository;
     if (paymentTimeoutSeconds <= 0) {
       throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
     }
     this.paymentTimeoutSeconds = paymentTimeoutSeconds;
-  }
-
-  public OrderService(
-      OrderRepository orderRepository,
-      CartService cartService,
-      InventoryService inventoryService,
-      OutboxEventService outboxEventService,
-      CatalogClient catalogClient,
-      IdentityClient identityClient,
-      long paymentTimeoutSeconds) {
-    this(
-        orderRepository,
-        cartService,
-        inventoryService,
-        outboxEventService,
-        catalogClient,
-        identityClient,
-        null,
-        null,
-        paymentTimeoutSeconds);
-  }
-
-  public OrderService(
-      OrderRepository orderRepository,
-      CartService cartService,
-      InventoryService inventoryService,
-      OutboxEventService outboxEventService,
-      CatalogClient catalogClient,
-      IdentityClient identityClient,
-      PaymentEventHistoryRepository paymentEventHistoryRepository,
-      long paymentTimeoutSeconds) {
-    this(
-        orderRepository,
-        cartService,
-        inventoryService,
-        outboxEventService,
-        catalogClient,
-        identityClient,
-        paymentEventHistoryRepository,
-        null,
-        paymentTimeoutSeconds);
   }
 
   public Order createFromCart(Long userId) {
@@ -269,35 +231,35 @@ public class OrderService {
         cart.getItems().stream()
             .mapToLong(item -> catalogBySku.get(item.getSkuId()).unitPrice() * item.getQuantity())
             .sum();
-    Order order =
-        new Order(userId, totalAmount, "VND", Instant.now().plusSeconds(paymentTimeoutSeconds));
-    if (idempotencyKey != null) {
-      order.setIdempotency(idempotencyKey, idempotencyHash);
-    }
-    if (checkoutContext != null) {
-      IdentityCheckoutContext.AddressSnapshot address = checkoutContext.address();
-      order.setShippingAddress(
-          address.id(),
-          address.recipientName(),
-          address.recipientPhone(),
-          address.addressLine(),
-          address.ward(),
-          address.district(),
-          address.province());
-    }
-    cart.getItems()
-        .forEach(
-            item ->
-                order.addItem(
-                    new OrderItem(
-                        item.getSkuId(),
-                        item.getQuantity(),
-                        catalogBySku.get(item.getSkuId()).unitPrice())));
     UUID operationId =
         operationId(idempotencyKey == null ? UUID.randomUUID().toString() : idempotencyKey);
     return executeInventoryCommand(
         quantities,
         () -> {
+          Instant paymentDueAt = databaseClock.deadlineAfter(paymentTimeoutSeconds);
+          Order order = new Order(userId, totalAmount, "VND", paymentDueAt);
+          if (idempotencyKey != null) {
+            order.setIdempotency(idempotencyKey, idempotencyHash);
+          }
+          if (checkoutContext != null) {
+            IdentityCheckoutContext.AddressSnapshot address = checkoutContext.address();
+            order.setShippingAddress(
+                address.id(),
+                address.recipientName(),
+                address.recipientPhone(),
+                address.addressLine(),
+                address.ward(),
+                address.district(),
+                address.province());
+          }
+          cart.getItems()
+              .forEach(
+                  item ->
+                      order.addItem(
+                          new OrderItem(
+                              item.getSkuId(),
+                              item.getQuantity(),
+                              catalogBySku.get(item.getSkuId()).unitPrice())));
           Order savedOrder = orderRepository.save(order);
           orderRepository.flush();
           inventoryService.reserveInCurrentTransaction(
@@ -353,8 +315,7 @@ public class OrderService {
 
   private <T> T executeInventoryCommand(
       Map<Long, Integer> quantities, java.util.function.Supplier<T> action) {
-    T result = inventoryService.executeCommand(quantities, action);
-    return result == null ? action.get() : result;
+    return inventoryService.executeCommand(quantities, action);
   }
 
   @Transactional
@@ -383,10 +344,9 @@ public class OrderService {
               != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
             throw new IllegalStateException("INVALID_STATE_TRANSITION");
           }
+          Instant decisionTime = databaseClock.now();
           String cancellationReason =
-              order.getPaymentDueAt().isAfter(Instant.now())
-                  ? "CUSTOMER_CANCELLED"
-                  : "PAYMENT_EXPIRED";
+              order.isPaymentExpiredAt(decisionTime) ? "PAYMENT_EXPIRED" : "CUSTOMER_CANCELLED";
           inventoryService.releaseInCurrentTransaction(
               order.getId(),
               cancellationReason,
@@ -415,7 +375,8 @@ public class OrderService {
           if (isDuplicate(event)) {
             return order;
           }
-          String invalidReason = validatePayment(event, order);
+          Instant decisionTime = databaseClock.now();
+          String invalidReason = validatePayment(event, order, decisionTime);
           if (invalidReason != null) {
             rejectPayment(order, event, invalidReason);
             return orderRepository.save(order);
@@ -449,7 +410,8 @@ public class OrderService {
           if (isDuplicate(event)) {
             return order;
           }
-          String invalidReason = validatePayment(event, order);
+          Instant decisionTime = databaseClock.now();
+          String invalidReason = validatePayment(event, order, decisionTime);
           if (invalidReason != null) {
             rejectPayment(order, event, invalidReason);
             return orderRepository.save(order);
@@ -476,10 +438,8 @@ public class OrderService {
         });
   }
 
-  public int expirePendingPayments(Instant now) {
-    List<Order> expiredOrders =
-        orderRepository.findExpiredPendingOrders(
-            com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT, now);
+  public int expirePendingPayments() {
+    List<Order> expiredOrders = orderRepository.findExpiredPendingOrders();
     int expiredCount = 0;
     for (Order candidateOrder : expiredOrders) {
       Order orderSnapshot =
@@ -489,9 +449,10 @@ public class OrderService {
               quantities(orderSnapshot),
               () -> {
                 Order order = getForUpdate(candidateOrder.getId());
+                Instant decisionTime = databaseClock.now();
                 if (order.getStatus()
                         != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT
-                    || order.getPaymentDueAt().isAfter(now)) {
+                    || !order.isPaymentExpiredAt(decisionTime)) {
                   return false;
                 }
                 inventoryService.releaseInCurrentTransaction(
@@ -509,7 +470,7 @@ public class OrderService {
     return expiredCount;
   }
 
-  private String validatePayment(PaymentEvent event, Order order) {
+  private String validatePayment(PaymentEvent event, Order order, Instant decisionTime) {
     if (event.eventId() == null || event.eventId().isBlank()) {
       throw new IllegalArgumentException("EVENT_ID_REQUIRED");
     }
@@ -522,7 +483,7 @@ public class OrderService {
     if (order.getStatus() != com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
       return "ORDER_NOT_PENDING";
     }
-    if (!order.getPaymentDueAt().isAfter(Instant.now())) {
+    if (order.isPaymentExpiredAt(decisionTime)) {
       return "PAYMENT_EXPIRED";
     }
     if (!Objects.equals(event.amount(), order.getTotalAmount())) {

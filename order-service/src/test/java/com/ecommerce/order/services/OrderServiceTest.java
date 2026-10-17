@@ -18,7 +18,9 @@ import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderStatus;
 import com.ecommerce.order.repositories.OrderRepository;
+import com.ecommerce.order.repositories.OrderStatusHistoryRepository;
 import com.ecommerce.order.repositories.PaymentEventHistoryRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,13 +33,18 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
+  private static final Instant DECISION_TIME = Instant.parse("2026-10-17T10:00:00Z");
+  private static final Instant PAYMENT_DUE_AT = Instant.parse("2026-10-17T10:15:00Z");
+
   @Mock private OrderRepository orderRepository;
   @Mock private CartService cartService;
   @Mock private InventoryService inventoryService;
   @Mock private OutboxEventService outboxEventService;
   @Mock private CatalogClient catalogClient;
   @Mock private IdentityClient identityClient;
+  @Mock private DatabaseClock databaseClock;
   @Mock private PaymentEventHistoryRepository paymentEventHistoryRepository;
+  @Mock private OrderStatusHistoryRepository orderStatusHistoryRepository;
 
   private OrderService orderService;
 
@@ -51,7 +58,17 @@ class OrderServiceTest {
             outboxEventService,
             catalogClient,
             identityClient,
+            databaseClock,
+            paymentEventHistoryRepository,
+            orderStatusHistoryRepository,
             900);
+    org.mockito.Mockito.lenient().when(databaseClock.now()).thenReturn(DECISION_TIME);
+    org.mockito.Mockito.lenient()
+        .when(databaseClock.deadlineAfter(900))
+        .thenReturn(PAYMENT_DUE_AT);
+    org.mockito.Mockito.lenient()
+        .when(inventoryService.executeCommand(any(), any()))
+        .thenAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(1)).get());
   }
 
   @Test
@@ -70,10 +87,9 @@ class OrderServiceTest {
 
     assertEquals(300_000L, order.getTotalAmount());
     assertEquals(1, order.getItems().size());
-    org.assertj.core.api.Assertions.assertThat(order.getPaymentDueAt())
-        .isBetween(
-            java.time.Instant.now().plusSeconds(895), java.time.Instant.now().plusSeconds(900));
-    verify(inventoryService).reserveInCurrentTransaction(any(), eq(Map.of(10L, 2)), any(), any());
+    org.assertj.core.api.Assertions.assertThat(order.getPaymentDueAt()).isEqualTo(PAYMENT_DUE_AT);
+    verify(inventoryService)
+        .reserveInCurrentTransaction(any(), eq(Map.of(10L, 2)), eq(PAYMENT_DUE_AT), any());
     verify(outboxEventService).enqueueOrderCreated(any(Order.class));
     verify(cartService).clear(eq(7L), eq(cart.getVersion()));
   }
@@ -156,11 +172,12 @@ class OrderServiceTest {
     org.assertj.core.api.Assertions.assertThat(replay.order()).isSameAs(first.order());
     verify(inventoryService).reserveInCurrentTransaction(any(), eq(Map.of(10L, 2)), any(), any());
     verify(cartService).clear(eq(7L), eq(cart.getVersion()));
+    verify(databaseClock, org.mockito.Mockito.times(1)).deadlineAfter(900);
   }
 
   @Test
   void cancel_shouldReleaseInventoryAndChangeStatus() {
-    Order order = new Order(7L, 300_000L, "VND");
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
     ReflectionTestUtils.setField(order, "id", 3L);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdAndUserId(3L, 7L)).thenReturn(Optional.of(order));
@@ -176,8 +193,23 @@ class OrderServiceTest {
   }
 
   @Test
+  void cancel_atDeadline_shouldUsePaymentExpiredReason() {
+    Order order = new Order(7L, 300_000L, "VND", DECISION_TIME);
+    ReflectionTestUtils.setField(order, "id", 3L);
+    order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
+    when(orderRepository.findByIdAndUserId(3L, 7L)).thenReturn(Optional.of(order));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(orderRepository.save(order)).thenReturn(order);
+
+    Order cancelled = orderService.cancel(7L, 3L);
+
+    assertEquals("PAYMENT_EXPIRED", cancelled.getCancellationReason());
+    verify(inventoryService).releaseInCurrentTransaction(eq(3L), eq("PAYMENT_EXPIRED"), any());
+  }
+
+  @Test
   void handlePaymentFailed_shouldReleaseInventoryOnlyOnce() {
-    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-failed")).thenReturn(false);
@@ -203,7 +235,7 @@ class OrderServiceTest {
 
   @Test
   void handlePaymentSucceeded_shouldFinalizeInventoryAndConfirmOrder() {
-    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-1")).thenReturn(false);
@@ -230,7 +262,7 @@ class OrderServiceTest {
 
   @Test
   void handlePaymentSucceeded_shouldCancelAndReleaseWhenAmountIsWrong() {
-    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-2")).thenReturn(false);
@@ -261,7 +293,7 @@ class OrderServiceTest {
 
   @Test
   void handlePaymentSucceeded_shouldReviewLateCallbackAndNeverFinalize() {
-    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().minusSeconds(1));
+    Order order = new Order(7L, 300_000L, "VND", DECISION_TIME);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-late")).thenReturn(false);
@@ -287,7 +319,7 @@ class OrderServiceTest {
 
   @Test
   void handlePaymentSucceeded_shouldIgnoreReplayAfterFirstHistoryRecord() {
-    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-3")).thenReturn(true);
 
@@ -309,7 +341,7 @@ class OrderServiceTest {
 
   @Test
   void handlePaymentSucceeded_shouldReviewNewEventForPreviouslyFailedPayment() {
-    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-failed")).thenReturn(false);
@@ -351,16 +383,14 @@ class OrderServiceTest {
 
   @Test
   void expirePendingPayments_shouldReleaseInventoryAndRejectExpiredOrder() {
-    java.time.Instant now = java.time.Instant.now();
-    Order order = new Order(7L, 300_000L, "VND", now.minusSeconds(1));
+    Order order = new Order(7L, 300_000L, "VND", DECISION_TIME.minusSeconds(1));
     ReflectionTestUtils.setField(order, "id", 3L);
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
-    when(orderRepository.findExpiredPendingOrders(OrderStatus.PENDING_PAYMENT, now))
-        .thenReturn(List.of(order));
+    when(orderRepository.findExpiredPendingOrders()).thenReturn(List.of(order));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(orderRepository.save(order)).thenReturn(order);
 
-    int expired = orderService.expirePendingPayments(now);
+    int expired = orderService.expirePendingPayments();
 
     assertEquals(1, expired);
     assertEquals(OrderStatus.CANCELLED, order.getStatus());
@@ -376,7 +406,9 @@ class OrderServiceTest {
         outboxEventService,
         catalogClient,
         identityClient,
+        databaseClock,
         paymentEventHistoryRepository,
+        orderStatusHistoryRepository,
         900);
   }
 

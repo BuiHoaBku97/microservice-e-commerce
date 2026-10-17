@@ -1,6 +1,5 @@
 package com.ecommerce.order.services;
 
-import java.time.Instant;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +13,6 @@ public class PaymentExpiryScheduler {
 
   @Scheduled(fixedDelayString = "${app.order.payment-expiry-scan-delay-ms:30000}")
   public void expirePendingPayments() {
-    orderService.expirePendingPayments(Instant.now());
+    orderService.expirePendingPayments();
   }
 }

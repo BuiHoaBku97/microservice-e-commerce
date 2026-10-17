@@ -17,6 +17,7 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -102,15 +103,16 @@ public class Order {
       fetch = FetchType.LAZY)
   private List<OrderItem> items = new ArrayList<>();
 
-  public Order(Long userId, Long totalAmount, String currency) {
-    this(userId, totalAmount, currency, Instant.now().plusSeconds(900));
-  }
-
   public Order(Long userId, Long totalAmount, String currency, Instant paymentDueAt) {
     this.userId = userId;
     this.totalAmount = totalAmount;
     this.currency = currency;
     this.paymentDueAt = paymentDueAt;
+  }
+
+  public boolean isPaymentExpiredAt(Instant decisionTime) {
+    Objects.requireNonNull(decisionTime, "decisionTime");
+    return !decisionTime.isBefore(paymentDueAt);
   }
 
   public void addItem(OrderItem item) {
