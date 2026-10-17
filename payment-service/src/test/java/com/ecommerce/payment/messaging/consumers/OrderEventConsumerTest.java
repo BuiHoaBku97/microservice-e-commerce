@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ecommerce.payment.services.PaymentService;
+import com.ecommerce.payment.messaging.events.OrderCancelledEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -71,19 +72,17 @@ class OrderEventConsumerTest {
   @Test
   void shouldUpdatePaymentWhenOrderIsCancelled() {
     consumer.consume(VALID_EVENT.replace("OrderCreated", "OrderCancelled")
+        .replace("\"aggregateId\":10", "\"aggregateId\":10,\"aggregateVersion\":1")
         .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"PAYMENT_EXPIRED\""), acknowledgment);
-    verify(service).handleOrderCancelled(10L, "PAYMENT_EXPIRED");
+    verify(service).handleOrderCancelled(any(OrderCancelledEvent.class));
     verify(acknowledgment).acknowledge();
   }
 
   @Test
   void shouldNotAcknowledgeInvalidCancellationReason() {
-    doThrow(new IllegalArgumentException("ORDER_CANCELLATION_REASON_INVALID"))
-        .when(service)
-        .handleOrderCancelled(10L, "UNKNOWN");
-
     String event =
         VALID_EVENT.replace("OrderCreated", "OrderCancelled")
+            .replace("\"aggregateId\":10", "\"aggregateId\":10,\"aggregateVersion\":1")
             .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"UNKNOWN\"");
 
     assertThatThrownBy(() -> consumer.consume(event, acknowledgment))

@@ -1,7 +1,10 @@
 package com.ecommerce.payment.services;
 
 import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
+import com.ecommerce.payment.messaging.events.OrderCancelledEvent;
 import com.ecommerce.payment.models.entities.Payment;
+import com.ecommerce.payment.models.entities.OrderPaymentContext;
+import com.ecommerce.payment.repositories.OrderPaymentContextRepository;
 import com.ecommerce.payment.repositories.PaymentRepository;
 import jakarta.transaction.Transactional;
 import java.util.Optional;
@@ -28,6 +31,7 @@ public class PaymentService {
   private final PaymentEventService paymentEventService;
   private final PaymentCallbackRepository callbackRepository;
   private final PaymentStatusHistoryRepository historyRepository;
+  private final OrderPaymentContextRepository orderPaymentContextRepository;
   private final byte[] callbackSecret;
   private final long callbackWindowSeconds;
 
@@ -35,12 +39,14 @@ public class PaymentService {
       PaymentRepository paymentRepository, PaymentEventService paymentEventService,
       PaymentCallbackRepository callbackRepository,
       PaymentStatusHistoryRepository historyRepository,
+      OrderPaymentContextRepository orderPaymentContextRepository,
       @Value("${app.payment.callback-secret:}") String callbackSecret,
       @Value("${app.payment.callback-window-seconds:300}") long callbackWindowSeconds) {
     this.paymentRepository = paymentRepository;
     this.paymentEventService = paymentEventService;
     this.callbackRepository = callbackRepository;
     this.historyRepository = historyRepository;
+    this.orderPaymentContextRepository = orderPaymentContextRepository;
     this.callbackSecret = callbackSecret.getBytes(StandardCharsets.UTF_8);
     this.callbackWindowSeconds = callbackWindowSeconds;
   }
@@ -48,20 +54,33 @@ public class PaymentService {
   @Transactional
   public Payment processOrderPayment(OrderCreatedEvent order) {
     validateOrderCreated(order);
-    Optional<Payment> existing = paymentRepository.findByOrderId(order.orderId());
+    OrderPaymentContext context = ensureAndLockContext(order.orderId());
+    Optional<Payment> existing = paymentRepository.findByOrderIdForUpdate(order.orderId());
     if (existing.isPresent()) {
       return existing.get();
     }
 
     Payment payment =
-        new Payment(
-            order.orderId(),
-            order.userId(),
-            order.totalAmount(),
-            order.currency(),
-            order.paymentDueAt());
+        context.isClosed()
+            ? Payment.closedFromOrder(
+                order.orderId(),
+                order.userId(),
+                order.totalAmount(),
+                order.currency(),
+                order.paymentDueAt(),
+                context.getCancellationReason())
+            : new Payment(
+                order.orderId(),
+                order.userId(),
+                order.totalAmount(),
+                order.currency(),
+                order.paymentDueAt());
     Payment saved = paymentRepository.save(payment);
-    historyRepository.save(new PaymentStatusHistory(saved, "ORDER_CREATED", saved.getFailureReason()));
+    historyRepository.save(
+        new PaymentStatusHistory(
+            saved,
+            context.isClosed() ? "ORDER_CREATED_AFTER_CANCELLATION" : "ORDER_CREATED",
+            context.isClosed() ? context.getCancellationReason() : saved.getFailureReason()));
     return saved;
   }
 
@@ -134,12 +153,15 @@ public class PaymentService {
   }
 
   @Transactional
-  public void handleOrderCancelled(Long orderId, String reason) {
-    paymentRepository.findByOrderIdForUpdate(orderId)
+  public void handleOrderCancelled(OrderCancelledEvent event) {
+    OrderPaymentContext context = ensureAndLockContext(event.orderId());
+    context.close(event);
+    orderPaymentContextRepository.save(context);
+    paymentRepository.findByOrderIdForUpdate(event.orderId())
         .ifPresent(payment -> {
           State before = State.of(payment);
-          payment.cancelFromOrder(reason);
-          recordIfChanged(payment, before, "ORDER_CANCELLED", reason);
+          payment.cancelFromOrder(event.reason());
+          recordIfChanged(payment, before, "ORDER_CANCELLED", event.reason());
         });
   }
 
@@ -158,6 +180,13 @@ public class PaymentService {
     if (!before.equals(State.of(payment))) {
       historyRepository.save(new PaymentStatusHistory(payment, source, reason));
     }
+  }
+
+  private OrderPaymentContext ensureAndLockContext(Long orderId) {
+    orderPaymentContextRepository.ensureExists(orderId);
+    return orderPaymentContextRepository
+        .findByOrderIdForUpdate(orderId)
+        .orElseThrow(() -> new IllegalStateException("ORDER_PAYMENT_CONTEXT_NOT_FOUND"));
   }
 
   private record State(PaymentStatus status, FundsStatus fundsStatus, OrderAcceptance acceptance) {

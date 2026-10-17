@@ -1,6 +1,7 @@
 package com.ecommerce.payment.messaging.consumers;
 
 import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
+import com.ecommerce.payment.messaging.events.OrderCancelledEvent;
 import com.ecommerce.payment.services.PaymentService;
 import com.ecommerce.payment.services.ProcessedEventService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,8 +60,7 @@ public class OrderEventConsumer {
           paymentService.handleOrderConfirmed(
               payload.path("orderId").asLong(), payload.path("paymentId").asLong());
       case "OrderCancelled" ->
-          paymentService.handleOrderCancelled(
-              payload.path("orderId").asLong(), payload.path("reason").asText());
+          paymentService.handleOrderCancelled(OrderCancelledEvent.from(payload));
       case "OrderConfirmationRejected" ->
           paymentService.handleOrderConfirmationRejected(
               payload.path("orderId").asLong(),

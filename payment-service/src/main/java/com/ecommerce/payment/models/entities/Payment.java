@@ -88,6 +88,21 @@ public class Payment {
     this.paymentDueAt = paymentDueAt;
   }
 
+  public static Payment closedFromOrder(
+      Long orderId,
+      Long userId,
+      Long amount,
+      String currency,
+      Instant paymentDueAt,
+      String cancellationReason) {
+    Payment payment = new Payment(orderId, userId, amount, currency, paymentDueAt);
+    payment.status = statusForCancellationReason(cancellationReason);
+    payment.orderAcceptance = OrderAcceptance.REJECTED;
+    payment.failureReason =
+        "PAYMENT_FAILED".equals(cancellationReason) ? "PAYMENT_FAILED" : null;
+    return payment;
+  }
+
   public void complete(String providerReference) {
     status = PaymentStatus.SUCCESS;
     fundsStatus = FundsStatus.RECEIVED;
@@ -138,13 +153,7 @@ public class Payment {
   }
 
   public void cancelFromOrder(String reason) {
-    PaymentStatus cancellationStatus =
-        switch (reason) {
-          case "PAYMENT_FAILED" -> PaymentStatus.FAILED;
-          case "PAYMENT_EXPIRED" -> PaymentStatus.EXPIRED;
-          case "CUSTOMER_CANCELLED" -> PaymentStatus.CANCELLED;
-          default -> throw new IllegalArgumentException("ORDER_CANCELLATION_REASON_INVALID");
-        };
+    PaymentStatus cancellationStatus = statusForCancellationReason(reason);
     orderAcceptance = OrderAcceptance.REJECTED;
     if (fundsStatus == FundsStatus.RECEIVED) {
       status = PaymentStatus.REQUIRES_REVIEW;
@@ -152,6 +161,15 @@ public class Payment {
     } else {
       status = cancellationStatus;
     }
+  }
+
+  private static PaymentStatus statusForCancellationReason(String reason) {
+    return switch (reason) {
+      case "PAYMENT_FAILED" -> PaymentStatus.FAILED;
+      case "PAYMENT_EXPIRED" -> PaymentStatus.EXPIRED;
+      case "CUSTOMER_CANCELLED" -> PaymentStatus.CANCELLED;
+      default -> throw new IllegalArgumentException("ORDER_CANCELLATION_REASON_INVALID");
+    };
   }
 
   @PrePersist

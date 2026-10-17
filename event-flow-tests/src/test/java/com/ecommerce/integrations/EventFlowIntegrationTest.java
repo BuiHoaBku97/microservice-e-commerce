@@ -10,6 +10,8 @@ import com.ecommerce.order.models.entities.OrderItem;
 import com.ecommerce.order.repositories.OrderRepository;
 import com.ecommerce.order.services.OrderService;
 import com.ecommerce.order.services.OutboxEventService;
+import com.ecommerce.payment.messaging.events.OrderCancelledEvent;
+import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
 import com.ecommerce.payment.models.dtos.requests.PaymentCallbackRequest;
 import com.ecommerce.payment.services.PaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -135,6 +137,40 @@ class EventFlowIntegrationTest {
     if (payments != null) payments.close();
     if (orders != null) orders.close();
     if (admin != null) admin.close();
+  }
+
+  @Test
+  void payment_shouldRemainClosed_whenCancellationArrivesBeforeCreation() {
+    long orderId =
+        9_000_000L + Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 999_999L);
+    PaymentService paymentService = payments.getBean(PaymentService.class);
+
+    paymentService.handleOrderCancelled(
+        new OrderCancelledEvent(
+            UUID.randomUUID().toString(),
+            orderId,
+            "PAYMENT_EXPIRED",
+            Instant.now(),
+            2L));
+    paymentService.processOrderPayment(
+        new OrderCreatedEvent(
+            orderId, 20L, 100_000L, "VND", Instant.now().plusSeconds(300)));
+
+    Map<String, Object> payment =
+        jdbc(payments)
+            .queryForMap(
+                "SELECT status, funds_status, order_acceptance FROM payments WHERE order_id=?",
+                orderId);
+    assertThat(payment)
+        .containsEntry("status", "EXPIRED")
+        .containsEntry("funds_status", "NOT_RECEIVED")
+        .containsEntry("order_acceptance", "REJECTED");
+    assertThat(
+            count(
+                payments,
+                "SELECT count(*) FROM outbox_events WHERE aggregate_id=?",
+                orderId))
+        .isZero();
   }
 
   @Test

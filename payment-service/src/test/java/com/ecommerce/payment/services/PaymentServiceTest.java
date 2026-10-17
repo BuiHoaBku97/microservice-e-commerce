@@ -15,9 +15,12 @@ import com.ecommerce.payment.models.entities.OrderAcceptance;
 import com.ecommerce.payment.models.entities.PaymentStatusHistory;
 import com.ecommerce.payment.models.dtos.requests.PaymentCallbackRequest;
 import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
+import com.ecommerce.payment.messaging.events.OrderCancelledEvent;
+import com.ecommerce.payment.models.entities.OrderPaymentContext;
 import com.ecommerce.payment.repositories.PaymentRepository;
 import com.ecommerce.payment.repositories.PaymentCallbackRepository;
 import com.ecommerce.payment.repositories.PaymentStatusHistoryRepository;
+import com.ecommerce.payment.repositories.OrderPaymentContextRepository;
 import java.util.Optional;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -41,18 +44,20 @@ class PaymentServiceTest {
 
   @Mock private PaymentCallbackRepository callbackRepository;
   @Mock private PaymentStatusHistoryRepository historyRepository;
+  @Mock private OrderPaymentContextRepository orderPaymentContextRepository;
   private PaymentService service;
 
   @BeforeEach
   void setUp() {
     service = new PaymentService(
         paymentRepository, paymentEventService, callbackRepository, historyRepository,
-        "test-secret", 300);
+        orderPaymentContextRepository, "test-secret", 300);
   }
 
   @Test
   void shouldCreatePendingPaymentForValidOrder() {
-    when(paymentRepository.findByOrderId(10L)).thenReturn(Optional.empty());
+    givenContext(new OrderPaymentContext(10L));
+    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.empty());
     when(paymentRepository.save(any(Payment.class)))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -68,7 +73,8 @@ class PaymentServiceTest {
   @Test
   void shouldReturnExistingPaymentWhenOrderEventIsDuplicated() {
     Payment existing = new Payment(10L, 20L, 100_000L, "VND");
-    when(paymentRepository.findByOrderId(10L)).thenReturn(Optional.of(existing));
+    givenContext(new OrderPaymentContext(10L));
+    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.of(existing));
 
     Payment payment =
         service.processOrderPayment(new OrderCreatedEvent(
@@ -187,9 +193,10 @@ class PaymentServiceTest {
   void handleOrderCancelled_shouldMapReasonToTerminalState(
       String reason, PaymentStatus expectedStatus) {
     Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
+    givenContext(new OrderPaymentContext(10L));
     when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.of(payment));
 
-    service.handleOrderCancelled(10L, reason);
+    service.handleOrderCancelled(cancelEvent(reason));
 
     assertThat(payment.getStatus()).isEqualTo(expectedStatus);
     assertThat(payment.getOrderAcceptance()).isEqualTo(OrderAcceptance.REJECTED);
@@ -201,9 +208,10 @@ class PaymentServiceTest {
   void handleOrderCancelled_shouldKeepReceivedFundsInReview() {
     Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
     payment.receive("received-transaction", Instant.now());
+    givenContext(new OrderPaymentContext(10L));
     when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.of(payment));
 
-    service.handleOrderCancelled(10L, "PAYMENT_FAILED");
+    service.handleOrderCancelled(cancelEvent("PAYMENT_FAILED"));
 
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUIRES_REVIEW);
     assertThat(payment.getFundsStatus()).isEqualTo(FundsStatus.RECEIVED);
@@ -214,15 +222,66 @@ class PaymentServiceTest {
   @Test
   void handleOrderCancelled_shouldRejectUnknownReasonWithoutMutation() {
     Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
-    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.of(payment));
 
-    assertThatThrownBy(() -> service.handleOrderCancelled(10L, "UNKNOWN"))
+    assertThatThrownBy(
+            () ->
+                service.handleOrderCancelled(
+                    new OrderCancelledEvent(
+                        "cancel-1", 10L, "UNKNOWN", Instant.now(), 1L)))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("ORDER_CANCELLATION_REASON_INVALID");
+        .hasMessage("ORDER_CANCELLED_INVALID");
 
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
     assertThat(payment.getOrderAcceptance()).isEqualTo(OrderAcceptance.PENDING);
     verify(historyRepository, never()).save(any());
+  }
+
+  @Test
+  void orderCancelledBeforeOrderCreated_shouldMaterializeClosedPayment() {
+    OrderPaymentContext context = new OrderPaymentContext(10L);
+    givenContext(context);
+    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.empty());
+    when(paymentRepository.save(any(Payment.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    service.handleOrderCancelled(cancelEvent("CUSTOMER_CANCELLED"));
+    Payment payment =
+        service.processOrderPayment(
+            new OrderCreatedEvent(
+                10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(300)));
+
+    assertThat(context.isClosed()).isTrue();
+    assertThat(context.getCancellationReason()).isEqualTo("CUSTOMER_CANCELLED");
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+    assertThat(payment.getFundsStatus()).isEqualTo(FundsStatus.NOT_RECEIVED);
+    assertThat(payment.getOrderAcceptance()).isEqualTo(OrderAcceptance.REJECTED);
+    verify(paymentEventService, never()).enqueuePaymentResult(any());
+  }
+
+  @Test
+  void conflictingCancellationContext_shouldBeRejected() {
+    OrderPaymentContext context = new OrderPaymentContext(10L);
+    givenContext(context);
+    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.empty());
+    service.handleOrderCancelled(cancelEvent("CUSTOMER_CANCELLED"));
+
+    assertThatThrownBy(
+            () ->
+                service.handleOrderCancelled(
+                    new OrderCancelledEvent(
+                        "cancel-2", 10L, "PAYMENT_EXPIRED", Instant.now(), 2L)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("ORDER_CANCELLATION_CONTEXT_CONFLICT");
+    assertThat(context.getCancellationReason()).isEqualTo("CUSTOMER_CANCELLED");
+  }
+
+  private void givenContext(OrderPaymentContext context) {
+    when(orderPaymentContextRepository.findByOrderIdForUpdate(context.getOrderId()))
+        .thenReturn(Optional.of(context));
+  }
+
+  private OrderCancelledEvent cancelEvent(String reason) {
+    return new OrderCancelledEvent("cancel-1", 10L, reason, Instant.now(), 1L);
   }
 
   private String sign(String timestamp, String body) throws Exception {
