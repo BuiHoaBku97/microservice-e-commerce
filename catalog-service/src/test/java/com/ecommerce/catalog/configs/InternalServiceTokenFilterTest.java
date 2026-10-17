@@ -29,6 +29,24 @@ class InternalServiceTokenFilterTest {
   }
 
   @Test
+  void validReadServiceJwtGrantsCatalogReadScope() throws Exception {
+    var request = new MockHttpServletRequest("GET", "/internal/v1/skus/10");
+    request.setServletPath("/internal/v1/skus/10");
+    request.addHeader(
+        "X-Service-Authorization",
+        "Bearer " + token("order-service", "catalog-service", "catalog.read", 60));
+    new InternalServiceTokenFilter(
+            KEY_ID + "=" + Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded()),
+            KEY_ID + "=order-service",
+            "ecommerce-internal")
+        .doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+    assertThat(SecurityContextHolder.getContext().getAuthentication().getAuthorities())
+        .extracting("authority")
+        .contains("SCOPE_INTERNAL_SERVICE", "SCOPE_catalog.read");
+  }
+
+  @Test
   void invalidClaimsDoNotAuthenticate() throws Exception {
     for (String token :
         List.of(

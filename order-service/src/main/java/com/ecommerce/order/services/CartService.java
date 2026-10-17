@@ -1,6 +1,9 @@
 package com.ecommerce.order.services;
 
 import com.ecommerce.order.models.dtos.CartDtos;
+import com.ecommerce.order.clients.CatalogCheckoutItem;
+import com.ecommerce.order.clients.CatalogReadClient;
+import com.ecommerce.order.exceptions.CatalogUnavailableException;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.CartItem;
 import com.ecommerce.order.repositories.CartRepository;
@@ -11,9 +14,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class CartService {
   private final CartRepository cartRepository;
+  private final CatalogReadClient catalogReadClient;
 
-  public CartService(CartRepository cartRepository) {
+  public CartService(CartRepository cartRepository, CatalogReadClient catalogReadClient) {
     this.cartRepository = cartRepository;
+    this.catalogReadClient = catalogReadClient;
   }
 
   @Transactional
@@ -38,6 +43,7 @@ public class CartService {
 
   @Transactional
   public Cart add(Long userId, CartDtos.CartItemRequest request, Long expectedVersion) {
+    requireSellableSku(request.skuId());
     Cart cart = checkedCart(userId, expectedVersion);
     CartItem item =
         cart.getItems().stream()
@@ -67,6 +73,10 @@ public class CartService {
   @Transactional
   public Cart update(
       Long userId, Long skuId, CartDtos.CartItemRequest request, Long expectedVersion) {
+    if (!Objects.equals(skuId, request.skuId())) {
+      throw new IllegalArgumentException("SKU_ID_MISMATCH");
+    }
+    requireSellableSku(skuId);
     Cart cart = checkedCart(userId, expectedVersion);
     CartItem item =
         cart.getItems().stream()
@@ -100,5 +110,19 @@ public class CartService {
     if (expectedVersion != null && !Objects.equals(expectedVersion, cart.getVersion()))
       throw new IllegalStateException("VERSION_CONFLICT");
     return cart;
+  }
+
+  private void requireSellableSku(Long skuId) {
+    CatalogCheckoutItem sku;
+    try {
+      sku = catalogReadClient.getSku(skuId);
+    } catch (feign.FeignException.NotFound exception) {
+      throw new IllegalArgumentException("SKU_NOT_FOUND");
+    } catch (feign.FeignException exception) {
+      throw new CatalogUnavailableException();
+    }
+    if (sku == null || !sku.sellable()) {
+      throw new IllegalStateException("SKU_NOT_SELLABLE");
+    }
   }
 }

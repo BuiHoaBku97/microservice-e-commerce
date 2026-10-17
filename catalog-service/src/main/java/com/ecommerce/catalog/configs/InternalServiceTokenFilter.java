@@ -58,6 +58,8 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
       String keyId = signedJwt.getHeader().getKeyId();
       String caller = keyOwners.get(keyId);
       String scope = claims.get("scope", String.class);
+      String requiredScope =
+          "GET".equals(request.getMethod()) ? "catalog.read" : "catalog.checkout";
       if (caller == null || !caller.equals(claims.getSubject())) {
         response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_IDENTITY");
         return;
@@ -67,7 +69,7 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
         return;
       }
       if (scope == null
-          || Arrays.stream(scope.split("\\s+")).noneMatch("catalog.checkout"::equals)) {
+          || Arrays.stream(scope.split("\\s+")).noneMatch(requiredScope::equals)) {
         response.sendError(HttpServletResponse.SC_FORBIDDEN, "INSUFFICIENT_SERVICE_SCOPE");
         return;
       }
@@ -82,7 +84,7 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
                   null,
                   List.of(
                       new SimpleGrantedAuthority("SCOPE_INTERNAL_SERVICE"),
-                      new SimpleGrantedAuthority("SCOPE_catalog.checkout"))));
+                      new SimpleGrantedAuthority("SCOPE_" + requiredScope))));
     } catch (Exception exception) {
       response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN");
       return;

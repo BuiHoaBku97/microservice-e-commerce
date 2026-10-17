@@ -31,6 +31,8 @@ public interface CatalogService {
 
   List<CheckoutItemResponse> getCheckoutItems(List<Long> skuIds);
 
+  CheckoutItemResponse getSkuForInventory(Long skuId);
+
   List<CategoryResponse> listAllCategories();
   CategoryResponse updateCategory(Long id, UpdateCategoryRequest request);
   List<ProductResponse> listAllProducts();

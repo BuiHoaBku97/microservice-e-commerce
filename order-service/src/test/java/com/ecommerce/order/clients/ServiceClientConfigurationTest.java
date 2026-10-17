@@ -56,4 +56,19 @@ class ServiceClientConfigurationTest {
                 .getParameterCount())
         .isEqualTo(1);
   }
+
+  @Test
+  void catalogReadClientUsesCatalogReadScope() {
+    ServiceJwtProvider provider = mock(ServiceJwtProvider.class);
+    when(provider.issue("catalog-service", "catalog.read")).thenReturn("catalog-read-token");
+    RequestTemplate template = new RequestTemplate();
+
+    new CatalogReadClientConfiguration()
+        .catalogReadServiceTokenInterceptor(provider)
+        .apply(template);
+
+    assertThat(template.headers().get("X-Service-Authorization"))
+        .containsExactly("Bearer catalog-read-token");
+    verify(provider).issue("catalog-service", "catalog.read");
+  }
 }

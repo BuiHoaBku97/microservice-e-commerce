@@ -30,6 +30,8 @@ public class SecurityConfig {
                     .requestMatchers(
                         HttpMethod.POST, "/internal/v1/skus/checkout-items")
                     .hasAuthority("SCOPE_catalog.checkout")
+                    .requestMatchers(HttpMethod.GET, "/internal/v1/skus/{skuId}")
+                    .hasAuthority("SCOPE_catalog.read")
                     .requestMatchers("/internal/**")
                     .denyAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/categories", "/api/v1/products/**")

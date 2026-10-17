@@ -221,6 +221,28 @@ public class CatalogServiceImpl implements CatalogService {
 
   @Override
   @Transactional(readOnly = true)
+  public CheckoutItemResponse getSkuForInventory(Long skuId) {
+    Sku sku =
+        skuRepository
+            .findById(skuId)
+            .orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
+    Product product = sku.getProduct();
+    boolean sellable = product.getStatus() == Status.ACTIVE && sku.getStatus() == Status.ACTIVE;
+    return new CheckoutItemResponse(
+        sku.getId(),
+        product.getId(),
+        sku.getCode(),
+        product.getName(),
+        sku.getColor(),
+        sku.getSize(),
+        sku.getPrice(),
+        sku.getCurrency(),
+        product.getVersion(),
+        sellable);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<CategoryResponse> listAllCategories() {
     return categoryRepository.findAll().stream().map(this::toResponse).toList();
   }
