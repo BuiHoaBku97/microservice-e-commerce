@@ -538,10 +538,8 @@ public class OrderService {
   }
 
   private boolean isDuplicate(PaymentEvent event) {
-    return (event.eventId() != null
-            && paymentEventHistoryRepository.existsByEventId(event.eventId()))
-        || (event.paymentId() != null
-            && paymentEventHistoryRepository.existsByPaymentId(event.paymentId()));
+    return event.eventId() != null
+        && paymentEventHistoryRepository.existsByEventId(event.eventId());
   }
 
   private void rejectPayment(Order order, PaymentEvent event, String reason) {

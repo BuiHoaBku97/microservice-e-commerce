@@ -23,6 +23,8 @@ import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.junit.jupiter.api.BeforeEach;
@@ -158,6 +160,19 @@ class PaymentServiceTest {
     assertThat(result.getStatus()).isEqualTo(PaymentStatus.REQUIRES_REVIEW);
     assertThat(result.getFundsStatus()).isEqualTo(FundsStatus.RECEIVED);
     verify(paymentEventService).enqueuePaymentResult(payment);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"PAYMENT_EXPIRED", "CUSTOMER_CANCELLED"})
+  void receive_shouldRequireReviewWhenFundsArriveAfterOrderClosed(String reason) {
+    Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
+    payment.cancelFromOrder(reason);
+
+    boolean received = payment.receive("late-transaction", Instant.now());
+
+    assertThat(received).isTrue();
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUIRES_REVIEW);
+    assertThat(payment.getFundsStatus()).isEqualTo(FundsStatus.RECEIVED);
   }
 
   private String sign(String timestamp, String body) throws Exception {

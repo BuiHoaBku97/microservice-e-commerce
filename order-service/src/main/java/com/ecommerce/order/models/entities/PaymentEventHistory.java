@@ -25,7 +25,7 @@ public class PaymentEventHistory {
   @Column(nullable = false, unique = true, length = 100)
   private String eventId;
 
-  @Column(nullable = false, unique = true)
+  @Column(nullable = false)
   private Long paymentId;
 
   @Column(nullable = false)

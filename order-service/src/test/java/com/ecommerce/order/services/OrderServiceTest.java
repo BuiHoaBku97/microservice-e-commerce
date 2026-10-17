@@ -181,7 +181,6 @@ class OrderServiceTest {
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-failed")).thenReturn(false);
-    when(paymentEventHistoryRepository.existsByPaymentId(24L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
     Order failed =
@@ -208,7 +207,6 @@ class OrderServiceTest {
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-1")).thenReturn(false);
-    when(paymentEventHistoryRepository.existsByPaymentId(20L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
     Order confirmed =
@@ -236,7 +234,6 @@ class OrderServiceTest {
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-2")).thenReturn(false);
-    when(paymentEventHistoryRepository.existsByPaymentId(21L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
     Order reviewed =
@@ -268,7 +265,6 @@ class OrderServiceTest {
     order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
     when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
     when(paymentEventHistoryRepository.existsByEventId("evt-late")).thenReturn(false);
-    when(paymentEventHistoryRepository.existsByPaymentId(23L)).thenReturn(false);
     when(orderRepository.save(order)).thenReturn(order);
 
     Order reviewed =
@@ -309,6 +305,48 @@ class OrderServiceTest {
 
     verify(inventoryService, never()).commitInCurrentTransaction(any(), any(), any());
     verify(paymentEventHistoryRepository, never()).save(any());
+  }
+
+  @Test
+  void handlePaymentSucceeded_shouldReviewNewEventForPreviouslyFailedPayment() {
+    Order order = new Order(7L, 300_000L, "VND", java.time.Instant.now().plusSeconds(60));
+    order.addItem(new com.ecommerce.order.models.entities.OrderItem(10L, 2, 150_000L));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+    when(paymentEventHistoryRepository.existsByEventId("evt-failed")).thenReturn(false);
+    when(paymentEventHistoryRepository.existsByEventId("evt-succeeded-late")).thenReturn(false);
+    when(orderRepository.save(order)).thenReturn(order);
+
+    OrderService service = orderServiceWithHistory();
+    service.handlePaymentFailed(
+        new PaymentEvent(
+            "evt-failed",
+            "PaymentFailed",
+            24L,
+            3L,
+            300_000L,
+            "VND",
+            order.getPaymentDueAt(),
+            "provider_declined"));
+
+    Order result =
+        service.handlePaymentSucceeded(
+            new PaymentEvent(
+                "evt-succeeded-late",
+                "PaymentSucceeded",
+                24L,
+                3L,
+                300_000L,
+                "VND",
+                order.getPaymentDueAt(),
+                null));
+
+    assertEquals(OrderStatus.CANCELLED, result.getStatus());
+    verify(inventoryService, never()).commitInCurrentTransaction(any(), any(), any());
+    verify(inventoryService)
+        .releaseInCurrentTransaction(eq(3L), eq("PAYMENT_FAILED"), any());
+    verify(paymentEventHistoryRepository, org.mockito.Mockito.times(2)).save(any());
+    verify(outboxEventService)
+        .enqueueOrderConfirmationRejected(order, 24L, "ORDER_CANCELLED");
   }
 
   @Test
