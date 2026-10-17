@@ -73,7 +73,7 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
 
   @Override
   public int getOrder() {
-    return Ordered.HIGHEST_PRECEDENCE;
+    return Ordered.HIGHEST_PRECEDENCE + 1;
   }
 
   private Claims authenticate(String token) {
