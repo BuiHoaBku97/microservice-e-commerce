@@ -10,6 +10,7 @@ import java.util.List;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,6 +27,7 @@ public class OutboxPublisher {
   private final Counter failed;
   private final String paymentEventsTopic;
   private final ObjectMapper objectMapper;
+  private final String workerId = UUID.randomUUID().toString();
 
   public OutboxPublisher(
       OutboxEventRepository outboxEventRepository,
@@ -44,7 +46,7 @@ public class OutboxPublisher {
   @Scheduled(fixedDelayString = "${app.outbox.publish-delay-ms:5000}")
   @Transactional
   public void publishPendingEvents() {
-    List<OutboxEvent> pending = outboxEventRepository.claimPendingBatch();
+    List<OutboxEvent> pending = outboxEventRepository.claimPendingBatch(workerId);
     pending.forEach(this::publish);
   }
 
@@ -52,7 +54,7 @@ public class OutboxPublisher {
     CorrelationContext.set(event.getCorrelationId());
     try {
       kafkaTemplate
-          .send(paymentEventsTopic, partitionKey(event), event.getPayload())
+          .send(event.getTopic(), event.getPartitionKey(), event.getPayload())
           .get(10, TimeUnit.SECONDS);
       event.markPublished();
       published.increment();

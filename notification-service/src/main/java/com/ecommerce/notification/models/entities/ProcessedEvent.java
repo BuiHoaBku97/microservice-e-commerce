@@ -16,5 +16,7 @@ public class ProcessedEvent {
   private String consumerName;
   private String eventId;
   private String eventType;
+  private String payloadHash;
+  private Long aggregateId;
   private Instant processedAt;
 }

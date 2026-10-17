@@ -31,8 +31,23 @@ public class OutboxEvent {
   @Column(nullable = false)
   private Long aggregateId;
 
+  @Column(nullable = false)
+  private Long aggregateVersion;
+
+  @Column(nullable = false)
+  private Integer schemaVersion;
+
   @Column(nullable = false, length = 80)
   private String eventType;
+
+  @Column(nullable = false, length = 200)
+  private String topic;
+
+  @Column(nullable = false, length = 128)
+  private String partitionKey;
+
+  @Column(nullable = false, updatable = false)
+  private Instant occurredAt;
 
   @Column(name = "correlation_id", nullable = false, length = 128)
   private String correlationId;
@@ -51,7 +66,8 @@ public class OutboxEvent {
   private Instant createdAt;
 
   private Instant publishedAt;
-  private Instant claimedUntil;
+  private String claimedBy;
+  private Instant leaseUntil;
   private Instant nextAttemptAt;
   private Instant updatedAt;
 
@@ -74,11 +90,42 @@ public class OutboxEvent {
       String eventType,
       String correlationId,
       String payload) {
+    this(
+        eventId,
+        aggregateType,
+        aggregateId,
+        0L,
+        eventType,
+        1,
+        "ecommerce.payment.events",
+        String.valueOf(aggregateId),
+        correlationId,
+        Instant.now(),
+        payload);
+  }
+
+  public OutboxEvent(
+      String eventId,
+      String aggregateType,
+      Long aggregateId,
+      Long aggregateVersion,
+      String eventType,
+      Integer schemaVersion,
+      String topic,
+      String partitionKey,
+      String correlationId,
+      Instant occurredAt,
+      String payload) {
     this.eventId = eventId;
     this.aggregateType = aggregateType;
     this.aggregateId = aggregateId;
+    this.aggregateVersion = aggregateVersion;
     this.eventType = eventType;
+    this.schemaVersion = schemaVersion;
+    this.topic = topic;
+    this.partitionKey = partitionKey;
     this.correlationId = correlationId;
+    this.occurredAt = occurredAt;
     this.payload = payload;
     this.createdAt = Instant.now();
     this.updatedAt = this.createdAt;
@@ -89,14 +136,16 @@ public class OutboxEvent {
     status = OutboxStatus.PUBLISHED;
     publishedAt = Instant.now();
     lastError = null;
-    claimedUntil = null;
+    claimedBy = null;
+    leaseUntil = null;
     updatedAt = Instant.now();
   }
 
   public void markFailed(String error) {
     attempts++;
     lastError = error;
-    claimedUntil = null;
+    claimedBy = null;
+    leaseUntil = null;
     updatedAt = Instant.now();
     if (attempts >= 8) {
       status = OutboxStatus.FAILED;
@@ -113,7 +162,8 @@ public class OutboxEvent {
     status = OutboxStatus.PENDING;
     attempts = 0;
     lastError = null;
-    claimedUntil = null;
+    claimedBy = null;
+    leaseUntil = null;
     nextAttemptAt = Instant.now();
     updatedAt = Instant.now();
   }

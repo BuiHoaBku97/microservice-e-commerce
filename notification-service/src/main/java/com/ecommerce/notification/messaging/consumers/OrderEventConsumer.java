@@ -44,7 +44,8 @@ public class OrderEventConsumer {
       Runnable action = () -> notificationService.createFromEvent(NotificationEvent.from(envelope));
       if (processedEventService == null) action.run();
       else processedEventService.process("notification-order-events",
-          envelope.get("eventId").asText(), eventType, action);
+          envelope.get("eventId").asText(), eventType, ProcessedEventService.payloadHash(message),
+          envelope.get("aggregateId").asLong(), action);
       acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("ORDER_EVENT_PROCESSING_FAILED", exception);

@@ -16,6 +16,7 @@ public class CatalogIndexer {
   private final SkuRepository skuRepository;
   private final CatalogReindexJobRepository catalogReindexJobRepository;
   private final CatalogIndexManager indexManager;
+  private final String workerId = UUID.randomUUID().toString();
 
   public CatalogIndexer(
       CatalogOutboxRepository catalogOutboxRepository,
@@ -34,7 +35,7 @@ public class CatalogIndexer {
   @Transactional
   public void indexPending() {
     indexManager.ensureServingIndex();
-    for (CatalogOutboxEvent event : catalogOutboxRepository.claimBatch())
+    for (CatalogOutboxEvent event : catalogOutboxRepository.claimBatch(workerId))
       try {
         index(event);
         event.complete();

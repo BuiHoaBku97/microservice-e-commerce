@@ -77,8 +77,9 @@ class OutboxMigrationIntegrationTest {
       assertThat(latest.migrate().migrationsExecuted).isZero();
       try (var duplicate = connection.prepareStatement(
           "INSERT INTO outbox_events(event_id,aggregate_type,aggregate_id,event_type,payload,"
-              + "correlation_id,status)"
-              + " VALUES (?, 'Order',10,'OrderCreated','{}','migration-test','PENDING')")) {
+              + "correlation_id,status,aggregate_version,schema_version,topic,partition_key,occurred_at)"
+              + " VALUES (?, 'Order',10,'OrderCreated','{}','migration-test','PENDING',0,1,"
+              + "'migration-topic','10',now())")) {
         duplicate.setString(1, stableId);
         assertThatThrownBy(duplicate::executeUpdate).isInstanceOfSatisfying(SQLException.class,
             error -> assertThat(error.getSQLState()).isEqualTo("23505"));

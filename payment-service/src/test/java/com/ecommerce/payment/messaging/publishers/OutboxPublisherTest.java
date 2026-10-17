@@ -14,6 +14,7 @@ import com.ecommerce.payment.models.entities.OutboxStatus;
 import com.ecommerce.payment.repositories.OutboxEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import java.time.Instant;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
@@ -30,12 +31,10 @@ class OutboxPublisherTest {
   @Test
   void shouldResendSameIdentity_whenBrokerAckSucceedsButDatabaseSaveFails() {
     String payload = "{\"eventId\":\"crash-event\",\"payload\":{\"orderId\":10}}";
-    OutboxEvent first = new OutboxEvent("crash-event", "Payment", 20L,
-        "PaymentSucceeded", payload);
+    OutboxEvent first = event("crash-event", payload);
     // Simulates loading the durable PENDING row after the previous save failed.
-    OutboxEvent reloaded = new OutboxEvent("crash-event", "Payment", 20L,
-        "PaymentSucceeded", payload);
-    when(repository.claimPendingBatch())
+    OutboxEvent reloaded = event("crash-event", payload);
+    when(repository.claimPendingBatch(any(String.class)))
         .thenReturn(List.of(first), List.of(reloaded));
     when(kafkaTemplate.send("ecommerce.payment.events", "10", payload))
         .thenReturn(CompletableFuture.completedFuture(null));
@@ -56,8 +55,8 @@ class OutboxPublisherTest {
     String payload =
         "{\"eventId\":\"payment-event-1\",\"eventType\":\"PaymentSucceeded\","
             + "\"payload\":{\"paymentId\":20,\"orderId\":10}}";
-    OutboxEvent event = new OutboxEvent("payment-event-1", "Payment", 20L, "PaymentSucceeded", payload);
-    when(repository.claimPendingBatch())
+    OutboxEvent event = event("payment-event-1", payload);
+    when(repository.claimPendingBatch(any(String.class)))
         .thenReturn(List.of(event));
     when(kafkaTemplate.send(eq("ecommerce.payment.events"), eq("10"), eq(payload)))
         .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker unavailable")))
@@ -78,5 +77,20 @@ class OutboxPublisherTest {
     assertThat(event.getLastError()).isNull();
     assertThat(meterRegistry.get("outbox.publish").tag("result", "failed").counter().count()).isEqualTo(1);
     assertThat(meterRegistry.get("outbox.publish").tag("result", "acknowledged").counter().count()).isEqualTo(1);
+  }
+
+  private OutboxEvent event(String eventId, String payload) {
+    return new OutboxEvent(
+        eventId,
+        "PAYMENT",
+        20L,
+        1L,
+        "PaymentSucceeded",
+        1,
+        "ecommerce.payment.events",
+        "10",
+        "correlation-1",
+        Instant.parse("2026-10-17T10:00:00Z"),
+        payload);
   }
 }

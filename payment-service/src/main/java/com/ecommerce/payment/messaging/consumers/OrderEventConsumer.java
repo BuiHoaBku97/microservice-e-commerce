@@ -40,7 +40,8 @@ public class OrderEventConsumer {
       Runnable action = () -> handle(envelope);
       if (processedEventService == null) action.run();
       else processedEventService.process("payment-order-events",
-          envelope.get("eventId").asText(), envelope.get("eventType").asText(), action);
+          envelope.get("eventId").asText(), envelope.get("eventType").asText(),
+          ProcessedEventService.payloadHash(message), envelope.get("aggregateId").asLong(), action);
       acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Khong the xu ly su kien don hang", exception);

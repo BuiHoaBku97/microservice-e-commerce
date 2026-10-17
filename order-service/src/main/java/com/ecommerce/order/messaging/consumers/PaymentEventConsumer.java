@@ -39,7 +39,14 @@ public class PaymentEventConsumer {
       CorrelationContext.set(envelope.get("correlationId").asText());
       Runnable action = () -> handle(event);
       if (processedEventService == null) action.run();
-      else processedEventService.process("order-payment-events", event.eventId(), event.eventType(), action);
+      else
+        processedEventService.process(
+            "order-payment-events",
+            event.eventId(),
+            event.eventType(),
+            ProcessedEventService.payloadHash(message),
+            envelope.get("aggregateId").asLong(),
+            action);
       acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("Khong the xu ly su kien thanh toan", exception);

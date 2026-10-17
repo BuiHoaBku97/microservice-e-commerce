@@ -66,7 +66,17 @@ public class PaymentEventService {
       String eventJson = objectMapper.writeValueAsString(envelope);
       outboxEventRepository.save(
           new OutboxEvent(
-              eventId, "PAYMENT", payment.getId(), eventType, correlationId, eventJson));
+              eventId,
+              "PAYMENT",
+              payment.getId(),
+              payment.getVersion(),
+              eventType,
+              1,
+              "ecommerce.payment.events",
+              String.valueOf(payment.getOrderId()),
+              correlationId,
+              occurredAt,
+              eventJson));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Khong the tao su kien thanh toan", exception);
     }

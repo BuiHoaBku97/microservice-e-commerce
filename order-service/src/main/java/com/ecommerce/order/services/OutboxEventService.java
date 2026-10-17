@@ -74,7 +74,18 @@ public class OutboxEventService {
           order.getVersion(), occurredAt, correlationId, businessPayload);
       String eventJson = objectMapper.writeValueAsString(envelope);
       outboxEventRepository.save(
-          new OutboxEvent(eventId, "ORDER", order.getId(), eventType, correlationId, eventJson));
+          new OutboxEvent(
+              eventId,
+              "ORDER",
+              order.getId(),
+              order.getVersion(),
+              eventType,
+              1,
+              "ecommerce.order.events",
+              String.valueOf(order.getId()),
+              correlationId,
+              occurredAt,
+              eventJson));
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Khong the tao su kien don hang", exception);
     }

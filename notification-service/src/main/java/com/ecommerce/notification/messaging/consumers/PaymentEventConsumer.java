@@ -38,7 +38,8 @@ public class PaymentEventConsumer {
       Runnable action = () -> notificationService.createFromEvent(NotificationEvent.from(envelope));
       if (processedEventService == null) action.run();
       else processedEventService.process("notification-payment-events",
-          envelope.get("eventId").asText(), envelope.get("eventType").asText(), action);
+          envelope.get("eventId").asText(), envelope.get("eventType").asText(),
+          ProcessedEventService.payloadHash(message), envelope.get("aggregateId").asLong(), action);
       acknowledgment.acknowledge();
     } catch (Exception exception) {
       throw new IllegalStateException("PAYMENT_EVENT_PROCESSING_FAILED", exception);

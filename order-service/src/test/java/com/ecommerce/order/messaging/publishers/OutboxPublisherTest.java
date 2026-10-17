@@ -33,7 +33,7 @@ class OutboxPublisherTest {
     // Simulates loading the durable PENDING row after the previous save failed.
     OutboxEvent reloaded = new OutboxEvent("crash-event", "Order", 10L,
         "OrderCreated", payload);
-    when(repository.claimPendingBatch())
+    when(repository.claimPendingBatch(any(String.class)))
         .thenReturn(List.of(first), List.of(reloaded));
     when(kafkaTemplate.send("ecommerce.order.events", "10", payload))
         .thenReturn(CompletableFuture.completedFuture(null));
@@ -55,7 +55,7 @@ class OutboxPublisherTest {
         "{\"eventId\":\"order-event-1\",\"eventType\":\"OrderCreated\","
             + "\"orderId\":10}";
     OutboxEvent event = new OutboxEvent("order-event-1", "Order", 10L, "OrderCreated", payload);
-    when(repository.claimPendingBatch())
+    when(repository.claimPendingBatch(any(String.class)))
         .thenReturn(List.of(event));
     when(kafkaTemplate.send(eq("ecommerce.order.events"), eq("10"), eq(payload)))
         .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker unavailable")))

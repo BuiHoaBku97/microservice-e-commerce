@@ -23,6 +23,30 @@ public class CatalogOutboxEvent {
   @Column(name = "product_version", nullable = false)
   private Long productVersion;
 
+  @Column(name = "aggregate_type", nullable = false)
+  private String aggregateType;
+
+  @Column(name = "aggregate_id", nullable = false)
+  private Long aggregateId;
+
+  @Column(name = "aggregate_version", nullable = false)
+  private Long aggregateVersion;
+
+  @Column(name = "schema_version", nullable = false)
+  private Integer schemaVersion;
+
+  @Column(nullable = false)
+  private String topic;
+
+  @Column(name = "partition_key", nullable = false)
+  private String partitionKey;
+
+  @Column(nullable = false, columnDefinition = "text")
+  private String payload;
+
+  @Column(name = "occurred_at", nullable = false)
+  private Instant occurredAt;
+
   @Column(name = "event_type", nullable = false)
   private String eventType;
 
@@ -44,23 +68,40 @@ public class CatalogOutboxEvent {
   @Column(name = "processed_at")
   private Instant processedAt;
 
+  @Column(name = "claimed_by")
+  private String claimedBy;
+
+  @Column(name = "lease_until")
+  private Instant leaseUntil;
+
   public CatalogOutboxEvent(Product product, String eventType) {
     eventId = UUID.randomUUID();
     productId = product.getId();
     productVersion = product.getSearchVersion();
+    aggregateType = "PRODUCT";
+    aggregateId = productId;
+    aggregateVersion = productVersion;
+    schemaVersion = 1;
+    topic = "catalog.search.index";
+    partitionKey = String.valueOf(productId);
+    payload = "{\"productId\":" + productId + ",\"productVersion\":" + productVersion + "}";
     this.eventType = eventType;
-    createdAt = nextAttemptAt = Instant.now();
+    occurredAt = createdAt = nextAttemptAt = Instant.now();
   }
 
   public void complete() {
     status = "PUBLISHED";
     processedAt = Instant.now();
     lastError = null;
+    claimedBy = null;
+    leaseUntil = null;
   }
 
   public void fail(String error) {
     attempts++;
     lastError = error;
+    claimedBy = null;
+    leaseUntil = null;
     status = attempts >= 8 ? "FAILED" : "PENDING";
     nextAttemptAt = Instant.now().plusSeconds(Math.min(300, 1L << Math.min(attempts, 8)));
   }
