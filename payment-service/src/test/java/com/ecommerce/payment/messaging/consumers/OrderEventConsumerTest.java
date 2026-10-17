@@ -76,6 +76,22 @@ class OrderEventConsumerTest {
     verify(acknowledgment).acknowledge();
   }
 
+  @Test
+  void shouldNotAcknowledgeInvalidCancellationReason() {
+    doThrow(new IllegalArgumentException("ORDER_CANCELLATION_REASON_INVALID"))
+        .when(service)
+        .handleOrderCancelled(10L, "UNKNOWN");
+
+    String event =
+        VALID_EVENT.replace("OrderCreated", "OrderCancelled")
+            .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"UNKNOWN\"");
+
+    assertThatThrownBy(() -> consumer.consume(event, acknowledgment))
+        .isInstanceOf(IllegalStateException.class)
+        .hasCauseInstanceOf(IllegalArgumentException.class);
+    verifyNoInteractions(acknowledgment);
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"OrderShipping", "OrderCompleted"})
   void shouldAcknowledgeKnownUnrelatedEventWithoutChangingBusinessData(String eventType) {

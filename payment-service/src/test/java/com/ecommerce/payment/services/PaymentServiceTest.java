@@ -11,6 +11,8 @@ import static org.mockito.Mockito.times;
 import com.ecommerce.payment.models.entities.Payment;
 import com.ecommerce.payment.models.entities.PaymentStatus;
 import com.ecommerce.payment.models.entities.FundsStatus;
+import com.ecommerce.payment.models.entities.OrderAcceptance;
+import com.ecommerce.payment.models.entities.PaymentStatusHistory;
 import com.ecommerce.payment.models.dtos.requests.PaymentCallbackRequest;
 import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
 import com.ecommerce.payment.repositories.PaymentRepository;
@@ -24,6 +26,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -173,6 +176,53 @@ class PaymentServiceTest {
     assertThat(received).isTrue();
     assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUIRES_REVIEW);
     assertThat(payment.getFundsStatus()).isEqualTo(FundsStatus.RECEIVED);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "PAYMENT_FAILED,FAILED",
+    "PAYMENT_EXPIRED,EXPIRED",
+    "CUSTOMER_CANCELLED,CANCELLED"
+  })
+  void handleOrderCancelled_shouldMapReasonToTerminalState(
+      String reason, PaymentStatus expectedStatus) {
+    Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
+    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.of(payment));
+
+    service.handleOrderCancelled(10L, reason);
+
+    assertThat(payment.getStatus()).isEqualTo(expectedStatus);
+    assertThat(payment.getOrderAcceptance()).isEqualTo(OrderAcceptance.REJECTED);
+    verify(historyRepository).save(any(PaymentStatusHistory.class));
+    verify(paymentEventService, never()).enqueuePaymentResult(any());
+  }
+
+  @Test
+  void handleOrderCancelled_shouldKeepReceivedFundsInReview() {
+    Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
+    payment.receive("received-transaction", Instant.now());
+    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.of(payment));
+
+    service.handleOrderCancelled(10L, "PAYMENT_FAILED");
+
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUIRES_REVIEW);
+    assertThat(payment.getFundsStatus()).isEqualTo(FundsStatus.RECEIVED);
+    assertThat(payment.getOrderAcceptance()).isEqualTo(OrderAcceptance.REJECTED);
+    assertThat(payment.getReviewReason()).isEqualTo("PAYMENT_FAILED");
+  }
+
+  @Test
+  void handleOrderCancelled_shouldRejectUnknownReasonWithoutMutation() {
+    Payment payment = new Payment(10L, 20L, 100_000L, "VND", Instant.now().plusSeconds(60));
+    when(paymentRepository.findByOrderIdForUpdate(10L)).thenReturn(Optional.of(payment));
+
+    assertThatThrownBy(() -> service.handleOrderCancelled(10L, "UNKNOWN"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("ORDER_CANCELLATION_REASON_INVALID");
+
+    assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    assertThat(payment.getOrderAcceptance()).isEqualTo(OrderAcceptance.PENDING);
+    verify(historyRepository, never()).save(any());
   }
 
   private String sign(String timestamp, String body) throws Exception {

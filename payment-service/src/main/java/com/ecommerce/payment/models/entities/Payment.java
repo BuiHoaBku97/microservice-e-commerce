@@ -138,12 +138,19 @@ public class Payment {
   }
 
   public void cancelFromOrder(String reason) {
+    PaymentStatus cancellationStatus =
+        switch (reason) {
+          case "PAYMENT_FAILED" -> PaymentStatus.FAILED;
+          case "PAYMENT_EXPIRED" -> PaymentStatus.EXPIRED;
+          case "CUSTOMER_CANCELLED" -> PaymentStatus.CANCELLED;
+          default -> throw new IllegalArgumentException("ORDER_CANCELLATION_REASON_INVALID");
+        };
     orderAcceptance = OrderAcceptance.REJECTED;
     if (fundsStatus == FundsStatus.RECEIVED) {
       status = PaymentStatus.REQUIRES_REVIEW;
       reviewReason = reason;
     } else {
-      status = "PAYMENT_EXPIRED".equals(reason) ? PaymentStatus.EXPIRED : PaymentStatus.CANCELLED;
+      status = cancellationStatus;
     }
   }
 
