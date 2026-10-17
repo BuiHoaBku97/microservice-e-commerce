@@ -45,12 +45,12 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
               .map(user -> user.getStatus() == UserStatus.ACTIVE)
               .orElse(false);
       if (!active) {
-        response.sendError(HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE", request.getRequestId());
         return;
       }
       chain.doFilter(request, response);
     } catch (NumberFormatException exception) {
-      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_USER_IDENTITY");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_USER_IDENTITY", request.getRequestId());
     }
   }
 }

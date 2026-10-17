@@ -44,8 +44,8 @@ public class NotificationService {
   }
 
   @Transactional
-  public List<Notification> listByUser(Long userId) {
-    return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+  public Page<Notification> listByUser(Long userId, Pageable pageable) {
+    return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
   }
 
   @Transactional

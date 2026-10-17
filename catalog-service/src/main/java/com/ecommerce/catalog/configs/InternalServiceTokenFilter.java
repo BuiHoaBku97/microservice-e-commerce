@@ -44,7 +44,7 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
     }
     String serviceAuthorizationHeader = request.getHeader("X-Service-Authorization");
     if (serviceAuthorizationHeader == null || !serviceAuthorizationHeader.startsWith("Bearer ")) {
-      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN", request.getRequestId());
       return;
     }
     try {
@@ -61,20 +61,20 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
       String requiredScope =
           "GET".equals(request.getMethod()) ? "catalog.read" : "catalog.checkout";
       if (caller == null || !caller.equals(claims.getSubject())) {
-        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_IDENTITY");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_IDENTITY", request.getRequestId());
         return;
       }
       if (!claims.getAudience().contains("catalog-service")) {
-        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_AUDIENCE");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_AUDIENCE", request.getRequestId());
         return;
       }
       if (scope == null
           || Arrays.stream(scope.split("\\s+")).noneMatch(requiredScope::equals)) {
-        response.sendError(HttpServletResponse.SC_FORBIDDEN, "INSUFFICIENT_SERVICE_SCOPE");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "INSUFFICIENT_SERVICE_SCOPE", request.getRequestId());
         return;
       }
       if (!"order-service".equals(caller)) {
-        response.sendError(HttpServletResponse.SC_FORBIDDEN, "SERVICE_CALLER_NOT_ALLOWED");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "SERVICE_CALLER_NOT_ALLOWED", request.getRequestId());
         return;
       }
       SecurityContextHolder.getContext()
@@ -86,7 +86,7 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
                       new SimpleGrantedAuthority("SCOPE_INTERNAL_SERVICE"),
                       new SimpleGrantedAuthority("SCOPE_" + requiredScope))));
     } catch (Exception exception) {
-      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN", request.getRequestId());
       return;
     }
     chain.doFilter(request, response);

@@ -68,12 +68,12 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
         return;
       }
-      response.sendError(HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE", request.getRequestId());
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
-      response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE", request.getRequestId());
     } catch (Exception exception) {
-      response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE", request.getRequestId());
     }
   }
 }

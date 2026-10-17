@@ -50,6 +50,11 @@ public class SecurityConfig {
                     .hasAnyAuthority("SCOPE_CUSTOMER", "SCOPE_ADMIN")
                     .anyRequest()
                     .authenticated())
+        .exceptionHandling(exceptions -> exceptions
+            .authenticationEntryPoint((request, response, exception) ->
+                JsonErrorWriter.write(response, 401, "UNAUTHENTICATED", request.getRequestId()))
+            .accessDeniedHandler((request, response, exception) ->
+                JsonErrorWriter.write(response, 403, "FORBIDDEN", request.getRequestId())))
         .addFilterBefore(
             jwtFilter,
             org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ecommerce.order.configs.JwtAuthenticationFilter;
@@ -58,7 +59,10 @@ class InventoryAvailabilityControllerTest {
     mockMvc
         .perform(get("/api/v1/inventory/availability").param("skuIds", "1"))
         .andExpect(status().isOk())
-        .andExpect(content().json("[{\"skuId\":1,\"available\":7}]", true));
+        .andExpect(jsonPath("$.code").value("SUCCESS"))
+        .andExpect(jsonPath("$.data[0].skuId").value(1))
+        .andExpect(jsonPath("$.data[0].available").value(7))
+        .andExpect(jsonPath("$.requestId").isNotEmpty());
   }
 
   @Test
@@ -67,7 +71,9 @@ class InventoryAvailabilityControllerTest {
         LongStream.rangeClosed(1, 101).mapToObj(Long::toString).collect(Collectors.joining(","));
     mockMvc
         .perform(get("/api/v1/inventory/availability").param("skuIds", ids))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+        .andExpect(jsonPath("$.errors").isArray());
     verifyNoInteractions(inventoryService);
   }
 

@@ -1,6 +1,8 @@
 package com.ecommerce.order.controllers;
 
 import com.ecommerce.order.models.dtos.CartDtos;
+import com.ecommerce.order.models.dtos.ApiResponse;
+import com.ecommerce.order.models.dtos.PageResponse;
 import com.ecommerce.order.models.entities.Cart;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderItem;
@@ -10,6 +12,7 @@ import com.ecommerce.order.services.CartService;
 import com.ecommerce.order.services.InventoryService;
 import com.ecommerce.order.services.OrderService;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -34,40 +37,43 @@ public class OrderController {
   private final CartService cartService;
   private final InventoryService inventoryService;
   private final OrderService orderService;
+  private final HttpServletRequest httpRequest;
 
   public OrderController(
-      CartService cartService, InventoryService inventoryService, OrderService orderService) {
+      CartService cartService, InventoryService inventoryService, OrderService orderService,
+      HttpServletRequest httpRequest) {
     this.cartService = cartService;
     this.inventoryService = inventoryService;
     this.orderService = orderService;
+    this.httpRequest = httpRequest;
   }
 
   @GetMapping("/cart")
-  public CartDtos.CartResponse cart(Authentication authentication) {
-    return response(cartService.getOrCreate(userId(authentication)));
+  public ApiResponse<CartDtos.CartResponse> cart(Authentication authentication) {
+    return success(response(cartService.getOrCreate(userId(authentication))));
   }
 
   @PostMapping("/cart/items")
-  public CartDtos.CartResponse add(
+  public ApiResponse<CartDtos.CartResponse> add(
       Authentication authentication,
       @RequestParam Long version,
       @Valid @RequestBody CartDtos.CartItemRequest request) {
-    return response(cartService.add(userId(authentication), request, version));
+    return success(response(cartService.add(userId(authentication), request, version)));
   }
 
   @PatchMapping("/cart/items/{skuId}")
-  public CartDtos.CartResponse update(
+  public ApiResponse<CartDtos.CartResponse> update(
       Authentication authentication,
       @PathVariable Long skuId,
       @RequestParam Long version,
       @Valid @RequestBody CartDtos.CartItemRequest request) {
-    return response(cartService.update(userId(authentication), skuId, request, version));
+    return success(response(cartService.update(userId(authentication), skuId, request, version)));
   }
 
   @DeleteMapping("/cart/items/{skuId}")
-  public CartDtos.CartResponse remove(
+  public ApiResponse<CartDtos.CartResponse> remove(
       Authentication authentication, @PathVariable Long skuId, @RequestParam Long version) {
-    return response(cartService.remove(userId(authentication), skuId, version));
+    return success(response(cartService.remove(userId(authentication), skuId, version)));
   }
 
   @DeleteMapping("/cart")
@@ -77,7 +83,7 @@ public class OrderController {
   }
 
   @PostMapping("/orders/checkout")
-  public ResponseEntity<CartDtos.OrderResponse> createOrder(
+  public ResponseEntity<ApiResponse<CartDtos.OrderResponse>> createOrder(
       Authentication authentication,
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       @Valid @RequestBody CartDtos.CheckoutRequest request) {
@@ -92,94 +98,94 @@ public class OrderController {
     if (result.replayed()) {
       response.header("Idempotency-Replayed", "true");
     }
-    return response.body(orderResponse(result.order()));
+    return response.body(success(orderResponse(result.order())));
   }
 
   @GetMapping("/orders")
-  public Page<CartDtos.OrderResponse> listOrders(
+  public ApiResponse<PageResponse<CartDtos.OrderResponse>> listOrders(
       Authentication authentication,
       @RequestParam(required = false) OrderStatus status,
       @RequestParam(required = false) Instant from,
       @RequestParam(required = false) Instant to,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return orderService
+    return success(PageResponse.from(orderService
         .listByUser(
             userId(authentication),
             status,
             from,
             to,
             PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
-        .map(this::orderResponse);
+        .map(this::orderResponse)));
   }
 
   @GetMapping("/orders/{orderId}")
-  public CartDtos.OrderResponse order(Authentication authentication, @PathVariable Long orderId) {
-    return orderResponse(orderService.getByUser(userId(authentication), orderId));
+  public ApiResponse<CartDtos.OrderResponse> order(Authentication authentication, @PathVariable Long orderId) {
+    return success(orderResponse(orderService.getByUser(userId(authentication), orderId)));
   }
 
   @GetMapping("/orders/{orderId}/history")
-  public List<CartDtos.OrderStatusHistoryResponse> orderHistory(
+  public ApiResponse<List<CartDtos.OrderStatusHistoryResponse>> orderHistory(
       Authentication authentication, @PathVariable Long orderId) {
-    return orderService.historyByUser(userId(authentication), orderId).stream()
+    return success(orderService.historyByUser(userId(authentication), orderId).stream()
         .map(this::historyResponse)
-        .toList();
+        .toList());
   }
 
   @PostMapping("/orders/{orderId}/cancel")
-  public CartDtos.OrderResponse cancelOrder(
+  public ApiResponse<CartDtos.OrderResponse> cancelOrder(
       Authentication authentication, @PathVariable Long orderId) {
-    return orderResponse(orderService.cancel(userId(authentication), orderId));
+    return success(orderResponse(orderService.cancel(userId(authentication), orderId)));
   }
 
   @PostMapping("/admin/orders/{orderId}/ship")
-  public CartDtos.OrderResponse ship(
+  public ApiResponse<CartDtos.OrderResponse> ship(
       @PathVariable Long orderId, @Valid @RequestBody CartDtos.VersionRequest request) {
-    return orderResponse(orderService.ship(orderId, request.version()));
+    return success(orderResponse(orderService.ship(orderId, request.version())));
   }
 
   @PostMapping("/admin/orders/{orderId}/complete")
-  public CartDtos.OrderResponse complete(
+  public ApiResponse<CartDtos.OrderResponse> complete(
       @PathVariable Long orderId, @Valid @RequestBody CartDtos.VersionRequest request) {
-    return orderResponse(orderService.complete(orderId, request.version()));
+    return success(orderResponse(orderService.complete(orderId, request.version())));
   }
 
   @GetMapping("/admin/orders")
-  public Page<CartDtos.OrderResponse> adminOrders(
+  public ApiResponse<PageResponse<CartDtos.OrderResponse>> adminOrders(
       @RequestParam(required = false) Long userId,
       @RequestParam(required = false) OrderStatus status,
       @RequestParam(required = false) Instant from,
       @RequestParam(required = false) Instant to,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return orderService
+    return success(PageResponse.from(orderService
         .listForAdmin(
             userId,
             status,
             from,
             to,
             PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
-        .map(this::orderResponse);
+        .map(this::orderResponse)));
   }
 
   @GetMapping("/admin/orders/{orderId}")
-  public CartDtos.OrderResponse adminOrder(@PathVariable Long orderId) {
-    return orderResponse(orderService.getForAdmin(orderId));
+  public ApiResponse<CartDtos.OrderResponse> adminOrder(@PathVariable Long orderId) {
+    return success(orderResponse(orderService.getForAdmin(orderId)));
   }
 
   @GetMapping("/admin/orders/{orderId}/history")
-  public List<CartDtos.OrderStatusHistoryResponse> adminOrderHistory(@PathVariable Long orderId) {
-    return orderService.historyForAdmin(orderId).stream().map(this::historyResponse).toList();
+  public ApiResponse<List<CartDtos.OrderStatusHistoryResponse>> adminOrderHistory(@PathVariable Long orderId) {
+    return success(orderService.historyForAdmin(orderId).stream().map(this::historyResponse).toList());
   }
 
   @GetMapping("/admin/reports/orders")
-  public OrderService.OrderReport orderReport(
+  public ApiResponse<OrderService.OrderReport> orderReport(
       @RequestParam(required = false) Instant from, @RequestParam(required = false) Instant to) {
-    return orderService.report(from, to);
+    return success(orderService.report(from, to));
   }
 
   @GetMapping("/inventory/availability")
-  public List<CartDtos.InventoryAvailabilityResponse> availability(
+  public ApiResponse<List<CartDtos.InventoryAvailabilityResponse>> availability(
       @RequestParam List<Long> skuIds) {
     if (skuIds.size() > 100) {
       throw new IllegalArgumentException("Chỉ được kiểm tra tối đa 100 SKU");
@@ -187,53 +193,53 @@ public class OrderController {
     if (skuIds.isEmpty() || skuIds.stream().anyMatch(id -> id == null || id <= 0)) {
       throw new IllegalArgumentException("Danh sách SKU phải chứa các ID lớn hơn 0");
     }
-    return inventoryService.availability(skuIds);
+    return success(inventoryService.availability(skuIds));
   }
 
   @PostMapping("/admin/inventory/{skuId}/initialize")
-  public CartDtos.InventoryResponse initialize(
+  public ApiResponse<CartDtos.InventoryResponse> initialize(
       @PathVariable Long skuId,
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       Authentication authentication) {
-    return toInventory(inventoryService.initialize(skuId, idempotencyKey, userId(authentication)));
+    return success(toInventory(inventoryService.initialize(skuId, idempotencyKey, userId(authentication))));
   }
 
   @PostMapping("/admin/inventory/{skuId}/receipts")
-  public CartDtos.InventoryResponse receipt(
+  public ApiResponse<CartDtos.InventoryResponse> receipt(
       @PathVariable Long skuId,
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       Authentication authentication,
       @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
-    return toInventory(
-        inventoryService.receipt(skuId, request, idempotencyKey, userId(authentication)));
+    return success(toInventory(
+        inventoryService.receipt(skuId, request, idempotencyKey, userId(authentication))));
   }
 
   @PostMapping("/admin/inventory/{skuId}/adjustments")
-  public CartDtos.InventoryResponse adjustment(
+  public ApiResponse<CartDtos.InventoryResponse> adjustment(
       @PathVariable Long skuId,
       @RequestHeader("Idempotency-Key") String idempotencyKey,
       Authentication authentication,
       @Valid @RequestBody CartDtos.InventoryMutationRequest request) {
-    return toInventory(
-        inventoryService.adjustment(skuId, request, idempotencyKey, userId(authentication)));
+    return success(toInventory(
+        inventoryService.adjustment(skuId, request, idempotencyKey, userId(authentication))));
   }
 
   @GetMapping("/admin/inventory")
-  public Page<CartDtos.InventoryResponse> inventory(
+  public ApiResponse<PageResponse<CartDtos.InventoryResponse>> inventory(
       @RequestParam(required = false) Long skuId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return inventoryService
+    return success(PageResponse.from(inventoryService
         .list(skuId, PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
-        .map(this::toInventory);
+        .map(this::toInventory)));
   }
 
   @GetMapping("/admin/inventory/{skuId}/movements")
-  public Page<CartDtos.StockMovementResponse> movements(
+  public ApiResponse<PageResponse<CartDtos.StockMovementResponse>> movements(
       @PathVariable Long skuId,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return inventoryService
+    return success(PageResponse.from(inventoryService
         .movements(skuId, PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
         .map(
             m ->
@@ -251,7 +257,7 @@ public class OrderController {
                     m.getSourceEventId(),
                     m.getOperationId(),
                     m.getReason(),
-                    m.getCreatedAt()));
+                    m.getCreatedAt()))));
   }
 
   private Long userId(Authentication authentication) {
@@ -324,6 +330,10 @@ public class OrderController {
         item.getUnitPrice(),
         item.getLineTotal(),
         item.getCurrency());
+  }
+
+  private <T> ApiResponse<T> success(T data) {
+    return ApiResponse.success(data, httpRequest.getRequestId());
   }
 
   private CartDtos.OrderStatusHistoryResponse historyResponse(OrderStatusHistory history) {

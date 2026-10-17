@@ -44,10 +44,10 @@ $tokens = (Invoke-Json POST "/api/v1/auth/login" @{email=$email;password=$passwo
 $customerToken = $tokens.accessToken
 $rotated = (Invoke-Json POST "/api/v1/auth/refresh" @{refreshToken=$tokens.refreshToken}).data
 
-$address = Invoke-Json POST "/api/v1/users/me/addresses" @{
+$address = (Invoke-Json POST "/api/v1/users/me/addresses" @{
   recipientName="Smoke User";recipientPhone="0900000000";addressLine="1 Test Street"
   ward="Ward 1";district="District 1";province="Ho Chi Minh";defaultAddress=$true
-} $customerToken
+} $customerToken).data
 $category = (Invoke-Json POST "/api/v1/admin/categories" @{
   code="SMOKE-$suffix";name="Smoke $suffix";slug="smoke-$suffix"
 } $AdminToken).data
@@ -65,31 +65,31 @@ $key = "smoke-$suffix"
 Invoke-Json POST "/api/v1/admin/inventory/$($sku.id)/initialize" $null $AdminToken @{
   "Idempotency-Key"="$key-init"
 } | Out-Null
-$receipt = Invoke-Json POST "/api/v1/admin/inventory/$($sku.id)/receipts" @{
+$receipt = (Invoke-Json POST "/api/v1/admin/inventory/$($sku.id)/receipts" @{
   quantity=10;reason="compose-smoke"
-} $AdminToken @{"Idempotency-Key"="$key-receipt"}
-$replayed = Invoke-Json POST "/api/v1/admin/inventory/$($sku.id)/receipts" @{
+} $AdminToken @{"Idempotency-Key"="$key-receipt"}).data
+$replayed = (Invoke-Json POST "/api/v1/admin/inventory/$($sku.id)/receipts" @{
   quantity=10;reason="compose-smoke"
-} $AdminToken @{"Idempotency-Key"="$key-receipt"}
+} $AdminToken @{"Idempotency-Key"="$key-receipt"}).data
 if ($replayed.onHand -ne $receipt.onHand) { throw "Inventory idempotency replay changed stock" }
 
-Wait-Until { $page=Invoke-Json GET "/api/v1/products/search?q=ao%20smoke%20$suffix"; if ($page.totalElements -ge 1) { $page } } "Elasticsearch indexing" | Out-Null
-$cart = Invoke-Json GET "/api/v1/cart" $null $customerToken
-$cart = Invoke-Json POST "/api/v1/cart/items?version=$($cart.version)" @{
+Wait-Until { $page=(Invoke-Json GET "/api/v1/products/search?q=ao%20smoke%20$suffix").data; if ($page.totalElements -ge 1) { $page } } "Elasticsearch indexing" | Out-Null
+$cart = (Invoke-Json GET "/api/v1/cart" $null $customerToken).data
+$cart = (Invoke-Json POST "/api/v1/cart/items?version=$($cart.version)" @{
   skuId=$sku.id;quantity=1;displayedUnitPrice=125000
-} $customerToken
-$order = Invoke-Json POST "/api/v1/orders/checkout" @{
+} $customerToken).data
+$order = (Invoke-Json POST "/api/v1/orders/checkout" @{
   cartVersion=$cart.version;addressId=$address.id
   paymentMethod="MOCK_ONLINE";customerNote="Compose smoke"
   expectedItems=@(@{skuId=$sku.id;quantity=1;expectedUnitPrice=125000})
-} $customerToken @{"Idempotency-Key"="$key-checkout"}
+} $customerToken @{"Idempotency-Key"="$key-checkout"}).data
 $payment = Wait-Until {
   $candidate=(Invoke-Json GET "/api/v1/orders/$($order.id)/payment" $null $customerToken).data
   if ($candidate.id) { $candidate }
 } "payment creation"
 Invoke-Json POST "/api/v1/admin/demo/payments/$($payment.id)/simulate" @{result="SUCCESS"} $AdminToken | Out-Null
 Wait-Until {
-  $candidate=Invoke-Json GET "/api/v1/orders/$($order.id)" $null $customerToken
+  $candidate=(Invoke-Json GET "/api/v1/orders/$($order.id)" $null $customerToken).data
   if ($candidate.status -eq "CONFIRMED") { $candidate }
 } "order confirmation" | Out-Null
 Wait-Until {
@@ -98,7 +98,7 @@ Wait-Until {
 } "notification creation" | Out-Null
 
 $inventory = Invoke-Json GET "/api/v1/admin/inventory?skuId=$($sku.id)" $null $AdminToken
-$row = $inventory.content[0]
+$row = $inventory.data.items[0]
 if ($row.onHand -lt 0 -or $row.reserved -lt 0 -or $row.reserved -gt $row.onHand) {
   throw "Inventory invariant failed"
 }

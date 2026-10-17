@@ -3,7 +3,10 @@ package com.ecommerce.notification.controllers;
 import com.ecommerce.notification.models.entities.DeliveryAttempt;
 import com.ecommerce.notification.models.entities.Notification;
 import com.ecommerce.notification.models.entities.NotificationStatus;
+import com.ecommerce.notification.models.dtos.ApiResponse;
+import com.ecommerce.notification.models.dtos.PageResponse;
 import com.ecommerce.notification.services.NotificationService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -24,19 +27,23 @@ public class AdminNotificationController {
   }
 
   @GetMapping
-  public Page<AdminNotificationResponse> list(
+  public ApiResponse<PageResponse<AdminNotificationResponse>> list(
       @RequestParam(required = false) NotificationStatus status,
       @RequestParam(required = false) Long orderId,
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
-    return notificationService.listForAdmin(
+      @RequestParam(defaultValue = "20") int size,
+      HttpServletRequest request) {
+    var notifications = notificationService.listForAdmin(
             status, orderId, PageRequest.of(Math.max(0, page), Math.min(Math.max(size, 1), 100)))
         .map(AdminNotificationResponse::from);
+    return ApiResponse.success(PageResponse.from(notifications), request.getRequestId());
   }
 
   @GetMapping("/{id}/attempts")
-  public List<DeliveryAttemptResponse> attempts(@PathVariable Long id) {
-    return notificationService.listAttempts(id).stream().map(DeliveryAttemptResponse::from).toList();
+  public ApiResponse<List<DeliveryAttemptResponse>> attempts(
+      @PathVariable Long id, HttpServletRequest request) {
+    return ApiResponse.success(notificationService.listAttempts(id).stream()
+        .map(DeliveryAttemptResponse::from).toList(), request.getRequestId());
   }
 
   public record AdminNotificationResponse(

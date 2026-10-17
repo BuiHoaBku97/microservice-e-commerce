@@ -35,7 +35,8 @@ class ActiveAccountFilterTest {
         execute("POST", "/api/v1/admin/products", "http://127.0.0.1:1");
 
     assertThat(response.getStatus()).isEqualTo(503);
-    assertThat(response.getErrorMessage()).isEqualTo("IDENTITY_UNAVAILABLE");
+    assertThat(response.getContentAsString()).contains("\"code\":\"IDENTITY_UNAVAILABLE\"")
+        .contains("\"errors\":[]");
   }
 
   private MockHttpServletResponse execute(String method, String path, String identityUrl)

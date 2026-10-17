@@ -20,7 +20,7 @@ export default function () {
     const availability = http.get(`${base}/inventory/availability?skuIds=${__ENV.HOT_SKU_ID}`,
       { tags: { flow: 'availability' } });
     invariantFailures.add(!check(availability, {
-      'availability remains non-negative': r => r.status === 200 && r.json()[0].available >= 0,
+      'availability remains non-negative': r => r.status === 200 && r.json().data[0].available >= 0,
     }));
   }
   if (__ENV.CUSTOMER_TOKEN && __ENV.CHECKOUT_BODY) {

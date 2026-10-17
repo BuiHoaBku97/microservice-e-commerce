@@ -45,7 +45,8 @@ class ActiveAccountFilterTest {
         execute("http://localhost:" + server.getAddress().getPort(), "GET", "/api/v1/orders/3");
 
     assertThat(response.getStatus()).isEqualTo(403);
-    assertThat(response.getErrorMessage()).isEqualTo("ACCOUNT_NOT_ACTIVE");
+    assertThat(response.getContentAsString()).contains("\"code\":\"ACCOUNT_NOT_ACTIVE\"")
+        .contains("\"errors\":[]");
   }
 
   @Test
@@ -53,7 +54,8 @@ class ActiveAccountFilterTest {
     MockHttpServletResponse response = execute("http://127.0.0.1:1", "GET", "/api/v1/orders/3");
 
     assertThat(response.getStatus()).isEqualTo(503);
-    assertThat(response.getErrorMessage()).isEqualTo("IDENTITY_UNAVAILABLE");
+    assertThat(response.getContentAsString()).contains("\"code\":\"IDENTITY_UNAVAILABLE\"")
+        .contains("\"errors\":[]");
   }
 
   @Test

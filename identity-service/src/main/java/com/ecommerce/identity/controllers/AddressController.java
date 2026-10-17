@@ -2,8 +2,10 @@ package com.ecommerce.identity.controllers;
 
 import com.ecommerce.identity.models.dtos.requests.AddressRequest;
 import com.ecommerce.identity.models.dtos.responses.AddressResponse;
+import com.ecommerce.identity.models.dtos.responses.ApiResponse;
 import com.ecommerce.identity.services.AddressService;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -28,23 +30,24 @@ public class AddressController {
   }
 
   @GetMapping
-  public List<AddressResponse> list(Authentication authentication) {
-    return addressService.list(userId(authentication));
+  public ApiResponse<List<AddressResponse>> list(Authentication authentication, HttpServletRequest request) {
+    return ApiResponse.success(addressService.list(userId(authentication)), request.getRequestId());
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public AddressResponse create(
-      Authentication authentication, @Valid @RequestBody AddressRequest request) {
-    return addressService.create(userId(authentication), request);
+  public ApiResponse<AddressResponse> create(
+      Authentication authentication, @Valid @RequestBody AddressRequest body,
+      HttpServletRequest request) {
+    return ApiResponse.success(addressService.create(userId(authentication), body), request.getRequestId());
   }
 
   @PatchMapping("/{addressId}")
-  public AddressResponse update(
+  public ApiResponse<AddressResponse> update(
       Authentication authentication,
       @PathVariable Long addressId,
-      @Valid @RequestBody AddressRequest request) {
-    return addressService.update(userId(authentication), addressId, request);
+      @Valid @RequestBody AddressRequest body, HttpServletRequest request) {
+    return ApiResponse.success(addressService.update(userId(authentication), addressId, body), request.getRequestId());
   }
 
   @DeleteMapping("/{addressId}")
@@ -54,8 +57,9 @@ public class AddressController {
   }
 
   @PutMapping("/{addressId}/default")
-  public AddressResponse makeDefault(Authentication authentication, @PathVariable Long addressId) {
-    return addressService.makeDefault(userId(authentication), addressId);
+  public ApiResponse<AddressResponse> makeDefault(Authentication authentication, @PathVariable Long addressId,
+      HttpServletRequest request) {
+    return ApiResponse.success(addressService.makeDefault(userId(authentication), addressId), request.getRequestId());
   }
 
   private Long userId(Authentication authentication) {

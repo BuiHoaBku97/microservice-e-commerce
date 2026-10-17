@@ -4,6 +4,7 @@ import com.ecommerce.payment.models.dtos.responses.ApiResponse;
 import com.ecommerce.payment.models.dtos.responses.PaymentResponse;
 import com.ecommerce.payment.models.entities.PaymentStatus;
 import com.ecommerce.payment.models.dtos.responses.PaymentStatusHistoryResponse;
+import com.ecommerce.payment.models.dtos.responses.PageResponse;
 import com.ecommerce.payment.services.PaymentQueryService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -25,7 +26,7 @@ public class AdminPaymentController {
   }
 
   @GetMapping("/payments")
-  public ApiResponse<Page<PaymentResponse>> payments(
+  public ApiResponse<PageResponse<PaymentResponse>> payments(
       @RequestParam(required = false) PaymentStatus status,
       @RequestParam(required = false) Long orderId,
       @RequestParam(required = false) Long userId,
@@ -35,8 +36,8 @@ public class AdminPaymentController {
       @RequestParam(defaultValue = "20") int size,
       HttpServletRequest request) {
     return ApiResponse.success(
-        paymentQueryService.findForAdmin(status, orderId, userId, from, to,
-            PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))),
+        PageResponse.from(paymentQueryService.findForAdmin(status, orderId, userId, from, to,
+            PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))),
         request.getRequestId());
   }
 
@@ -46,13 +47,13 @@ public class AdminPaymentController {
   }
 
   @GetMapping("/payments/{id}/history")
-  public ApiResponse<Page<PaymentStatusHistoryResponse>> history(
+  public ApiResponse<PageResponse<PaymentStatusHistoryResponse>> history(
       @PathVariable Long id,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       HttpServletRequest request) {
-    return ApiResponse.success(paymentQueryService.history(id,
-        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))),
+    return ApiResponse.success(PageResponse.from(paymentQueryService.history(id,
+        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))),
         request.getRequestId());
   }
 

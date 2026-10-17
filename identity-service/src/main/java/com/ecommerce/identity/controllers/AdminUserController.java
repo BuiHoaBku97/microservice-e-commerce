@@ -3,6 +3,7 @@ package com.ecommerce.identity.controllers;
 import com.ecommerce.identity.models.dtos.requests.ChangeUserStatusRequest;
 import com.ecommerce.identity.models.dtos.responses.ApiResponse;
 import com.ecommerce.identity.models.dtos.responses.UserResponse;
+import com.ecommerce.identity.models.dtos.responses.PageResponse;
 import com.ecommerce.identity.models.entities.UserStatus;
 import com.ecommerce.identity.services.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,14 +22,14 @@ public class AdminUserController {
   }
 
   @GetMapping
-  public ApiResponse<Page<UserResponse>> list(
+  public ApiResponse<PageResponse<UserResponse>> list(
       @RequestParam(required = false) UserStatus status,
       @RequestParam(required = false) String keyword,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       HttpServletRequest request) {
-    return ApiResponse.success(users.list(status, keyword,
-        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))), request.getRequestId());
+    return ApiResponse.success(PageResponse.from(users.list(status, keyword,
+        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))), request.getRequestId());
   }
 
   @GetMapping("/{id}")

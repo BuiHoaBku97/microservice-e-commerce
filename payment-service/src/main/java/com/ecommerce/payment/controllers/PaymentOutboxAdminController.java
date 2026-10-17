@@ -1,6 +1,8 @@
 package com.ecommerce.payment.controllers;
 
 import com.ecommerce.payment.models.entities.*;
+import com.ecommerce.payment.models.dtos.responses.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import com.ecommerce.payment.repositories.OutboxEventRepository;
 import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,18 +18,20 @@ public class PaymentOutboxAdminController {
   }
 
   @GetMapping
-  public List<OutboxEvent> list(@RequestParam(defaultValue = "FAILED") OutboxStatus status) {
-    return outboxEventRepository.findTop100ByStatusOrderByCreatedAtAsc(status);
+  public ApiResponse<List<OutboxEvent>> list(@RequestParam(defaultValue = "FAILED") OutboxStatus status,
+      HttpServletRequest request) {
+    return ApiResponse.success(outboxEventRepository.findTop100ByStatusOrderByCreatedAtAsc(status),
+        request.getRequestId());
   }
 
   @PostMapping("/{id}/replay")
   @Transactional
-  public OutboxEvent replay(@PathVariable Long id) {
+  public ApiResponse<OutboxEvent> replay(@PathVariable Long id, HttpServletRequest request) {
     OutboxEvent event =
         outboxEventRepository
             .findById(id)
             .orElseThrow(() -> new IllegalArgumentException("OUTBOX_NOT_FOUND"));
     event.replay();
-    return event;
+    return ApiResponse.success(event, request.getRequestId());
   }
 }

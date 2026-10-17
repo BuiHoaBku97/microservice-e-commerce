@@ -11,7 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
-  List<Notification> findByUserIdOrderByCreatedAtDesc(Long userId);
+  Page<Notification> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
   Optional<Notification> findByDeduplicationKey(String deduplicationKey);
 

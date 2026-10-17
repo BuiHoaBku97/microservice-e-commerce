@@ -47,7 +47,7 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
     }
     String serviceAuthorizationHeader = request.getHeader("X-Service-Authorization");
     if (serviceAuthorizationHeader == null || !serviceAuthorizationHeader.startsWith("Bearer ")) {
-      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN", request.getRequestId());
       return;
     }
     try {
@@ -64,20 +64,20 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
       String requiredScope =
           request.getServletPath().endsWith("/status") ? "identity.status" : "identity.checkout";
       if (caller == null || !caller.equals(claims.getSubject())) {
-        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_IDENTITY");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_IDENTITY", request.getRequestId());
         return;
       }
       if (!claims.getAudience().contains("identity-service")) {
-        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_AUDIENCE");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_AUDIENCE", request.getRequestId());
         return;
       }
       if (scope == null || Arrays.stream(scope.split("\\s+")).noneMatch(requiredScope::equals)) {
-        response.sendError(HttpServletResponse.SC_FORBIDDEN, "INSUFFICIENT_SERVICE_SCOPE");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "INSUFFICIENT_SERVICE_SCOPE", request.getRequestId());
         return;
       }
       if (("identity.checkout".equals(requiredScope) && !"order-service".equals(caller))
           || ("identity.status".equals(requiredScope) && !STATUS_CALLERS.contains(caller))) {
-        response.sendError(HttpServletResponse.SC_FORBIDDEN, "SERVICE_CALLER_NOT_ALLOWED");
+        JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "SERVICE_CALLER_NOT_ALLOWED", request.getRequestId());
         return;
       }
       var currentAuthentication = SecurityContextHolder.getContext().getAuthentication();
@@ -98,7 +98,7 @@ public class InternalServiceTokenFilter extends OncePerRequestFilter {
       authentication.setDetails(Map.of("service", claims.getSubject(), "jti", claims.getId()));
       SecurityContextHolder.getContext().setAuthentication(authentication);
     } catch (Exception exception) {
-      response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN");
+      JsonErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED, "INVALID_SERVICE_TOKEN", request.getRequestId());
       return;
     }
     chain.doFilter(request, response);

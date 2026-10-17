@@ -13,6 +13,7 @@ import com.ecommerce.catalog.models.dtos.responses.ProductResponse;
 import com.ecommerce.catalog.models.dtos.responses.SearchProductResponse;
 import com.ecommerce.catalog.models.dtos.responses.SkuPriceHistoryResponse;
 import com.ecommerce.catalog.models.dtos.responses.SkuResponse;
+import com.ecommerce.catalog.models.dtos.responses.PageResponse;
 import com.ecommerce.catalog.services.CatalogSearchService;
 import com.ecommerce.catalog.services.CatalogService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,7 +50,7 @@ public class CatalogController {
   }
 
   @GetMapping("/products/search")
-  public ApiResponse<Page<SearchProductResponse>> search(
+  public ApiResponse<PageResponse<SearchProductResponse>> search(
       @RequestParam(required = false) String q,
       @RequestParam(required = false) Long categoryId,
       @RequestParam(required = false) Long minPrice,
@@ -62,7 +63,7 @@ public class CatalogController {
       throw new IllegalArgumentException("INVALID_PRICE_RANGE");
     }
     return ApiResponse.success(
-        searchService.search(q, categoryId, minPrice, maxPrice, sort, page, size),
+        PageResponse.from(searchService.search(q, categoryId, minPrice, maxPrice, sort, page, size)),
         request.getRequestId());
   }
 
@@ -162,14 +163,14 @@ public class CatalogController {
   }
 
   @GetMapping("/admin/skus/{id}/price-history")
-  public ApiResponse<Page<SkuPriceHistoryResponse>> skuPriceHistory(
+  public ApiResponse<PageResponse<SkuPriceHistoryResponse>> skuPriceHistory(
       @PathVariable Long id,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       HttpServletRequest request) {
     int safeSize = Math.min(Math.max(size, 1), 100);
     return ApiResponse.success(
-        catalogService.getSkuPriceHistory(id, PageRequest.of(Math.max(page, 0), safeSize)),
+        PageResponse.from(catalogService.getSkuPriceHistory(id, PageRequest.of(Math.max(page, 0), safeSize))),
         request.getRequestId());
   }
 }
