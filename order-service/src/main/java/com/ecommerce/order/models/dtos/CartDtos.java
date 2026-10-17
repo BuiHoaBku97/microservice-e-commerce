@@ -89,6 +89,8 @@ public final class CartDtos {
   public record OrderStatusHistoryResponse(
       Long id, OrderStatus status, String source, String reason, Instant createdAt) {}
 
+  public record VersionRequest(@NotNull Long version) {}
+
   public record CheckoutRequest(
       @NotNull Long cartVersion,
       @NotNull Long addressId,

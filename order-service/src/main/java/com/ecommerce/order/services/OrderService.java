@@ -380,8 +380,16 @@ public class OrderService {
   }
 
   @Transactional
-  public List<Order> listByUser(Long userId) {
-    return orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+  public Page<Order> listByUser(
+      Long userId,
+      com.ecommerce.order.models.entities.OrderStatus status,
+      Instant from,
+      Instant to,
+      Pageable pageable) {
+    validateTimeRange(from, to);
+    Page<Order> orders = orderRepository.findForUser(userId, status, from, to, pageable);
+    initializeItems(orders);
+    return orders;
   }
 
   @Transactional
@@ -642,11 +650,12 @@ public class OrderService {
   }
 
   @Transactional
-  public Order ship(Long orderId) {
+  public Order ship(Long orderId, Long expectedVersion) {
     Order order = getForUpdate(orderId);
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.SHIPPING) {
       return order;
     }
+    requireVersion(order, expectedVersion);
     order.ship(databaseClock.now());
     Order savedOrder = orderRepository.save(order);
     recordStatus(savedOrder, "ADMIN_SHIP", null);
@@ -655,11 +664,12 @@ public class OrderService {
   }
 
   @Transactional
-  public Order complete(Long orderId) {
+  public Order complete(Long orderId, Long expectedVersion) {
     Order order = getForUpdate(orderId);
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.COMPLETED) {
       return order;
     }
+    requireVersion(order, expectedVersion);
     order.complete(databaseClock.now());
     Order savedOrder = orderRepository.save(order);
     recordStatus(savedOrder, "ADMIN_COMPLETE", null);
@@ -704,7 +714,10 @@ public class OrderService {
       Instant from,
       Instant to,
       Pageable pageable) {
-    return orderRepository.findForAdmin(userId, status, from, to, pageable);
+    validateTimeRange(from, to);
+    Page<Order> orders = orderRepository.findForAdmin(userId, status, from, to, pageable);
+    initializeItems(orders);
+    return orders;
   }
 
   @Transactional
@@ -728,6 +741,28 @@ public class OrderService {
   private void recordStatus(Order order, String source, String reason) {
     if (orderStatusHistoryRepository != null) {
       orderStatusHistoryRepository.save(new OrderStatusHistory(order, source, reason));
+    }
+  }
+
+  private void requireVersion(Order order, Long expectedVersion) {
+    if (expectedVersion == null) {
+      throw new IllegalArgumentException("VERSION_REQUIRED");
+    }
+    if (!Objects.equals(order.getVersion(), expectedVersion)) {
+      throw new IllegalStateException("VERSION_CONFLICT");
+    }
+  }
+
+  private void validateTimeRange(Instant from, Instant to) {
+    if (from != null && to != null && !from.isBefore(to)) {
+      throw new IllegalArgumentException("INVALID_TIME_RANGE");
+    }
+  }
+
+  private void initializeItems(Page<Order> orders) {
+    List<Long> ids = orders.getContent().stream().map(Order::getId).toList();
+    if (!ids.isEmpty()) {
+      orderRepository.findAllWithItemsByIdIn(ids);
     }
   }
 

@@ -15,7 +15,25 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
-  List<Order> findByUserIdOrderByCreatedAtDesc(Long userId);
+  @Query(
+      """
+      select o from Order o
+      where o.userId = :userId
+        and (:status is null or o.status = :status)
+        and (:from is null or o.createdAt >= :from)
+        and (:to is null or o.createdAt < :to)
+      order by o.createdAt desc, o.id desc
+      """)
+  Page<Order> findForUser(
+      @Param("userId") Long userId,
+      @Param("status") OrderStatus status,
+      @Param("from") Instant from,
+      @Param("to") Instant to,
+      Pageable pageable);
+
+  @EntityGraph(attributePaths = "items")
+  @Query("select distinct o from Order o where o.id in :ids")
+  List<Order> findAllWithItemsByIdIn(@Param("ids") List<Long> ids);
 
   @EntityGraph(attributePaths = "items")
   Optional<Order> findByIdAndUserId(Long id, Long userId);
@@ -44,7 +62,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         and (:status is null or o.status = :status)
         and (:from is null or o.createdAt >= :from)
         and (:to is null or o.createdAt < :to)
-      order by o.createdAt desc
+      order by o.createdAt desc, o.id desc
       """)
   Page<Order> findForAdmin(
       @Param("userId") Long userId,

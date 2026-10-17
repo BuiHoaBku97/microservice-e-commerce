@@ -96,10 +96,21 @@ public class OrderController {
   }
 
   @GetMapping("/orders")
-  public List<CartDtos.OrderResponse> listOrders(Authentication authentication) {
-    return orderService.listByUser(userId(authentication)).stream()
-        .map(this::orderResponse)
-        .toList();
+  public Page<CartDtos.OrderResponse> listOrders(
+      Authentication authentication,
+      @RequestParam(required = false) OrderStatus status,
+      @RequestParam(required = false) Instant from,
+      @RequestParam(required = false) Instant to,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return orderService
+        .listByUser(
+            userId(authentication),
+            status,
+            from,
+            to,
+            PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))
+        .map(this::orderResponse);
   }
 
   @GetMapping("/orders/{orderId}")
@@ -122,13 +133,15 @@ public class OrderController {
   }
 
   @PostMapping("/admin/orders/{orderId}/ship")
-  public CartDtos.OrderResponse ship(@PathVariable Long orderId) {
-    return orderResponse(orderService.ship(orderId));
+  public CartDtos.OrderResponse ship(
+      @PathVariable Long orderId, @Valid @RequestBody CartDtos.VersionRequest request) {
+    return orderResponse(orderService.ship(orderId, request.version()));
   }
 
   @PostMapping("/admin/orders/{orderId}/complete")
-  public CartDtos.OrderResponse complete(@PathVariable Long orderId) {
-    return orderResponse(orderService.complete(orderId));
+  public CartDtos.OrderResponse complete(
+      @PathVariable Long orderId, @Valid @RequestBody CartDtos.VersionRequest request) {
+    return orderResponse(orderService.complete(orderId, request.version()));
   }
 
   @GetMapping("/admin/orders")

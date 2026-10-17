@@ -455,6 +455,37 @@ class OrderServiceTest {
     verify(outboxEventService).enqueueOrderCancelled(order);
   }
 
+  @Test
+  void ship_shouldRejectStaleVersionBeforeChangingState() {
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
+    ReflectionTestUtils.setField(order, "id", 3L);
+    order.confirm(24L, DECISION_TIME.minusSeconds(10));
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> orderService.ship(3L, 1L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("VERSION_CONFLICT");
+
+    assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+    verify(orderRepository, never()).save(any());
+    verify(outboxEventService, never()).enqueueOrderShipping(any());
+  }
+
+  @Test
+  void ship_shouldReturnCompletedTransitionForIdempotentRetryBeforeVersionCheck() {
+    Order order = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
+    ReflectionTestUtils.setField(order, "id", 3L);
+    order.confirm(24L, DECISION_TIME.minusSeconds(10));
+    order.ship(DECISION_TIME);
+    when(orderRepository.findByIdForUpdate(3L)).thenReturn(Optional.of(order));
+
+    Order result = orderService.ship(3L, 99L);
+
+    org.assertj.core.api.Assertions.assertThat(result).isSameAs(order);
+    verify(orderRepository, never()).save(any());
+    verify(outboxEventService, never()).enqueueOrderShipping(any());
+  }
+
   private OrderService orderServiceWithHistory() {
     return new OrderService(
         orderRepository,
