@@ -11,6 +11,7 @@ import com.ecommerce.order.clients.CatalogCheckoutItem;
 import com.ecommerce.order.clients.CatalogClient;
 import com.ecommerce.order.clients.IdentityCheckoutContext;
 import com.ecommerce.order.clients.IdentityClient;
+import com.ecommerce.order.clients.IdentityStatusClient;
 import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.models.dtos.CartDtos;
 import com.ecommerce.order.models.entities.Cart;
@@ -42,6 +43,7 @@ class OrderServiceTest {
   @Mock private OutboxEventService outboxEventService;
   @Mock private CatalogClient catalogClient;
   @Mock private IdentityClient identityClient;
+  @Mock private IdentityStatusClient identityStatusClient;
   @Mock private DatabaseClock databaseClock;
   @Mock private PaymentEventHistoryRepository paymentEventHistoryRepository;
   @Mock private OrderStatusHistoryRepository orderStatusHistoryRepository;
@@ -58,6 +60,7 @@ class OrderServiceTest {
             outboxEventService,
             catalogClient,
             identityClient,
+            identityStatusClient,
             databaseClock,
             paymentEventHistoryRepository,
             orderStatusHistoryRepository,
@@ -75,7 +78,7 @@ class OrderServiceTest {
   void createFromCart_shouldCreateOrderAndReserveInventory() {
     Cart cart = cartWithItem(10L, 2, 150_000L);
     when(cartService.getOrCreate(7L)).thenReturn(cart);
-    when(catalogClient.getCheckoutItems(any(), any()))
+    when(catalogClient.getCheckoutItems(any()))
         .thenReturn(
             List.of(
                 new CatalogCheckoutItem(
@@ -98,7 +101,7 @@ class OrderServiceTest {
   void createFromCart_shouldRejectClientPriceBeforeReservingInventory() {
     Cart cart = cartWithItem(10L, 2, 150_000L);
     when(cartService.getOrCreate(7L)).thenReturn(cart);
-    when(catalogClient.getCheckoutItems(any(), any()))
+    when(catalogClient.getCheckoutItems(any()))
         .thenReturn(
             List.of(
                 new CatalogCheckoutItem(
@@ -114,7 +117,7 @@ class OrderServiceTest {
   void createFromCart_shouldRejectInactiveSkuBeforeReservingInventory() {
     Cart cart = cartWithItem(10L, 2, 150_000L);
     when(cartService.getOrCreate(7L)).thenReturn(cart);
-    when(catalogClient.getCheckoutItems(any(), any()))
+    when(catalogClient.getCheckoutItems(any()))
         .thenReturn(
             List.of(
                 new CatalogCheckoutItem(
@@ -149,7 +152,7 @@ class OrderServiceTest {
                     "Phường 1",
                     "Quận 1",
                     "TP HCM")));
-    when(catalogClient.getCheckoutItems(any(), any()))
+    when(catalogClient.getCheckoutItems(any()))
         .thenReturn(
             List.of(
                 new CatalogCheckoutItem(
@@ -161,6 +164,7 @@ class OrderServiceTest {
         orderService.checkout(7L, request, "Bearer token", "checkout-1");
     when(orderRepository.findByUserIdAndIdempotencyKey(7L, "checkout-1"))
         .thenReturn(Optional.of(first.order()));
+    when(identityStatusClient.getStatus(7L)).thenReturn("ACTIVE");
     OrderService.CheckoutResult replay =
         orderService.checkout(7L, request, "Bearer token", "checkout-1");
 
@@ -173,6 +177,53 @@ class OrderServiceTest {
     verify(inventoryService).reserveInCurrentTransaction(any(), eq(Map.of(10L, 2)), any(), any());
     verify(cartService).clear(eq(7L), eq(cart.getVersion()));
     verify(databaseClock, org.mockito.Mockito.times(1)).deadlineAfter(900);
+    verify(identityClient, org.mockito.Mockito.times(1)).getCheckoutContext(any(), any());
+    verify(identityStatusClient, org.mockito.Mockito.times(1)).getStatus(7L);
+  }
+
+  @Test
+  void checkoutReplay_shouldRejectLockedAccountWithoutReadingCartOrAddress() {
+    CartDtos.CheckoutRequest request =
+        new CartDtos.CheckoutRequest(
+            1L, 9L, List.of(new CartDtos.CheckoutItem(10L, 2, 150_000L)));
+    String requestHash = ReflectionTestUtils.invokeMethod(orderService, "checkoutHash", request);
+    Order existing = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
+    existing.setIdempotency("checkout-locked", requestHash);
+    existing.setShippingAddress(
+        9L, "Original recipient", "0900000000", "Original address", null, null, "HCM");
+    when(orderRepository.findByUserIdAndIdempotencyKey(7L, "checkout-locked"))
+        .thenReturn(Optional.of(existing));
+    when(identityStatusClient.getStatus(7L)).thenReturn("LOCKED");
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> orderService.checkout(7L, request, "Bearer token", "checkout-locked"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("ACCOUNT_NOT_ACTIVE");
+
+    verify(identityStatusClient).getStatus(7L);
+    verify(identityClient, never()).getCheckoutContext(any(), any());
+    verify(cartService, never()).getForCheckout(any());
+    verify(inventoryService, never()).reserveInCurrentTransaction(any(), any(), any(), any());
+  }
+
+  @Test
+  void checkoutReplay_shouldMapIdentityFailureToUnavailable() {
+    CartDtos.CheckoutRequest request =
+        new CartDtos.CheckoutRequest(
+            1L, 9L, List.of(new CartDtos.CheckoutItem(10L, 2, 150_000L)));
+    String requestHash = ReflectionTestUtils.invokeMethod(orderService, "checkoutHash", request);
+    Order existing = new Order(7L, 300_000L, "VND", PAYMENT_DUE_AT);
+    existing.setIdempotency("checkout-unavailable", requestHash);
+    when(orderRepository.findByUserIdAndIdempotencyKey(7L, "checkout-unavailable"))
+        .thenReturn(Optional.of(existing));
+    when(identityStatusClient.getStatus(7L)).thenThrow(new RuntimeException("timeout"));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> orderService.checkout(7L, request, "Bearer token", "checkout-unavailable"))
+        .isInstanceOf(com.ecommerce.order.exceptions.IdentityUnavailableException.class);
+
+    verify(identityClient, never()).getCheckoutContext(any(), any());
+    verify(cartService, never()).getForCheckout(any());
   }
 
   @Test
@@ -406,6 +457,7 @@ class OrderServiceTest {
         outboxEventService,
         catalogClient,
         identityClient,
+        identityStatusClient,
         databaseClock,
         paymentEventHistoryRepository,
         orderStatusHistoryRepository,

@@ -40,7 +40,8 @@ class ActiveAccountFilterTest {
         });
     server.start();
 
-    MockHttpServletResponse response = execute("http://localhost:" + server.getAddress().getPort());
+    MockHttpServletResponse response =
+        execute("http://localhost:" + server.getAddress().getPort(), "GET", "/api/v1/orders/3");
 
     assertThat(response.getStatus()).isEqualTo(403);
     assertThat(response.getErrorMessage()).isEqualTo("ACCOUNT_NOT_ACTIVE");
@@ -48,13 +49,22 @@ class ActiveAccountFilterTest {
 
   @Test
   void failsClosedWhenIdentityIsUnavailable() throws Exception {
-    MockHttpServletResponse response = execute("http://127.0.0.1:1");
+    MockHttpServletResponse response = execute("http://127.0.0.1:1", "GET", "/api/v1/orders/3");
 
     assertThat(response.getStatus()).isEqualTo(503);
     assertThat(response.getErrorMessage()).isEqualTo("IDENTITY_UNAVAILABLE");
   }
 
-  private MockHttpServletResponse execute(String identityUrl) throws Exception {
+  @Test
+  void skipsIdentityStatusForCheckout() throws Exception {
+    MockHttpServletResponse response =
+        execute("http://127.0.0.1:1", "POST", "/api/v1/orders/checkout");
+
+    assertThat(response.getStatus()).isEqualTo(200);
+  }
+
+  private MockHttpServletResponse execute(
+      String identityUrl, String method, String servletPath) throws Exception {
     var keyPairGenerator = KeyPairGenerator.getInstance("RSA");
     keyPairGenerator.initialize(2048);
     var keyPair = keyPairGenerator.generateKeyPair();
@@ -70,8 +80,8 @@ class ActiveAccountFilterTest {
         .setAuthentication(
             UsernamePasswordAuthenticationToken.authenticated(
                 "7", null, List.of(new SimpleGrantedAuthority("SCOPE_CUSTOMER"))));
-    var request = new MockHttpServletRequest("POST", "/api/v1/orders/checkout");
-    request.setServletPath("/api/v1/orders/checkout");
+    var request = new MockHttpServletRequest(method, servletPath);
+    request.setServletPath(servletPath);
     var response = new MockHttpServletResponse();
     filter.doFilter(request, response, new MockFilterChain());
     return response;

@@ -4,6 +4,7 @@ import static org.mockito.Mockito.mock;
 
 import com.ecommerce.order.clients.CatalogClient;
 import com.ecommerce.order.clients.IdentityClient;
+import com.ecommerce.order.clients.IdentityStatusClient;
 import com.ecommerce.order.services.CartService;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -53,6 +54,7 @@ final class ServiceContexts {
     @Bean CartService cartService() { return mock(CartService.class); }
     @Bean CatalogClient catalogClient() { return mock(CatalogClient.class); }
     @Bean IdentityClient identityClient() { return mock(IdentityClient.class); }
+    @Bean IdentityStatusClient identityStatusClient() { return mock(IdentityStatusClient.class); }
     @Bean(destroyMethod = "shutdown")
     RedissonClient redissonClient(@Value("${test.redis.address}") String address) {
       Config config = new Config();

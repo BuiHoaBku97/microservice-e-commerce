@@ -35,6 +35,12 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
   }
 
   @Override
+  protected boolean shouldNotFilter(HttpServletRequest request) {
+    return "POST".equals(request.getMethod())
+        && "/internal/v1/skus/checkout-items".equals(request.getServletPath());
+  }
+
+  @Override
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {

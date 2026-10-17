@@ -6,6 +6,7 @@ import com.ecommerce.order.clients.CatalogClient;
 import com.ecommerce.order.clients.IdentityCheckoutContext;
 import com.ecommerce.order.clients.IdentityCheckoutContextRequest;
 import com.ecommerce.order.clients.IdentityClient;
+import com.ecommerce.order.clients.IdentityStatusClient;
 import com.ecommerce.order.exceptions.CatalogUnavailableException;
 import com.ecommerce.order.exceptions.IdempotencyKeyConflictException;
 import com.ecommerce.order.exceptions.IdentityUnavailableException;
@@ -52,6 +53,7 @@ public class OrderService {
   private final OutboxEventService outboxEventService;
   private final CatalogClient catalogClient;
   private final IdentityClient identityClient;
+  private final IdentityStatusClient identityStatusClient;
   private final DatabaseClock databaseClock;
   private final long paymentTimeoutSeconds;
   private final PaymentEventHistoryRepository paymentEventHistoryRepository;
@@ -65,6 +67,7 @@ public class OrderService {
       OutboxEventService outboxEventService,
       CatalogClient catalogClient,
       IdentityClient identityClient,
+      IdentityStatusClient identityStatusClient,
       DatabaseClock databaseClock,
       PaymentEventHistoryRepository paymentEventHistoryRepository,
       OrderStatusHistoryRepository orderStatusHistoryRepository,
@@ -75,6 +78,7 @@ public class OrderService {
     this.outboxEventService = outboxEventService;
     this.catalogClient = catalogClient;
     this.identityClient = identityClient;
+    this.identityStatusClient = identityStatusClient;
     this.databaseClock = databaseClock;
     this.paymentEventHistoryRepository = paymentEventHistoryRepository;
     this.orderStatusHistoryRepository = orderStatusHistoryRepository;
@@ -86,7 +90,7 @@ public class OrderService {
 
   public Order createFromCart(Long userId) {
     Cart cart = cartService.getOrCreate(userId);
-    return createFromCart(cart, userId, null, null, null, null, null, null);
+    return createFromCart(cart, userId, null, null, null, null, null);
   }
 
   public Order createFromCart(
@@ -97,7 +101,6 @@ public class OrderService {
         userId,
         checkoutRequest == null ? null : checkoutRequest.cartVersion(),
         checkoutRequest == null ? null : checkoutRequest.expectedItems(),
-        authorization,
         null,
         null,
         null);
@@ -113,6 +116,7 @@ public class OrderService {
     Order existing =
         orderRepository.findByUserIdAndIdempotencyKey(userId, normalizedKey).orElse(null);
     if (existing != null) {
+      requireActiveAccount(userId);
       return replayOrReject(existing, requestHash);
     }
 
@@ -143,7 +147,6 @@ public class OrderService {
             userId,
             checkoutRequest.cartVersion(),
             checkoutRequest.expectedItems(),
-            authorization,
             normalizedKey,
             requestHash,
             checkoutContext),
@@ -155,7 +158,6 @@ public class OrderService {
       Long userId,
       Long expectedCartVersion,
       List<CartDtos.CheckoutItem> expectedItems,
-      String authorization,
       String idempotencyKey,
       String idempotencyHash,
       IdentityCheckoutContext checkoutContext) {
@@ -204,7 +206,7 @@ public class OrderService {
     List<CatalogCheckoutItem> catalogItems;
     try {
       catalogItems =
-          catalogClient.getCheckoutItems(new CatalogCheckoutRequest(skuIds), authorization);
+          catalogClient.getCheckoutItems(new CatalogCheckoutRequest(skuIds));
     } catch (feign.FeignException exception) {
       if (exception.status() == 404 || exception.status() == 409) {
         throw new IllegalStateException("SKU_NOT_SELLABLE");
@@ -496,6 +498,23 @@ public class OrderService {
       return "PAYMENT_DUE_AT_MISMATCH";
     }
     return null;
+  }
+
+  private void requireActiveAccount(Long userId) {
+    String status;
+    try {
+      status = identityStatusClient.getStatus(userId);
+    } catch (feign.FeignException exception) {
+      if (exception.status() == 403) {
+        throw new IllegalStateException("ACCOUNT_NOT_ACTIVE");
+      }
+      throw new IdentityUnavailableException();
+    } catch (Exception exception) {
+      throw new IdentityUnavailableException();
+    }
+    if (!"ACTIVE".equals(status)) {
+      throw new IllegalStateException("ACCOUNT_NOT_ACTIVE");
+    }
   }
 
   private boolean isDuplicate(PaymentEvent event) {

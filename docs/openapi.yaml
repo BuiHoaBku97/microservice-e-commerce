@@ -182,5 +182,5 @@ paths:
     get: {security: [{userJwt: []}], responses: {'200': {description: Filtered notification page}}}
   /internal/v1/skus/checkout-items:
     post:
-      security: [{serviceJwt: []}, {userJwt: []}]
+      security: [{serviceJwt: []}]
       responses: {'200': {description: Verified checkout data}, '401': {description: Invalid service JWT}, '403': {description: Wrong audience or scope}}

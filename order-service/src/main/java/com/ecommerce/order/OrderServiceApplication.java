@@ -10,7 +10,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableFeignClients(
     clients = {
       com.ecommerce.order.clients.CatalogClient.class,
-      com.ecommerce.order.clients.IdentityClient.class
+      com.ecommerce.order.clients.IdentityClient.class,
+      com.ecommerce.order.clients.IdentityStatusClient.class
     })
 public class OrderServiceApplication {
 
