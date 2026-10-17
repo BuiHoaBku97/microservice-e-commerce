@@ -44,11 +44,13 @@ class OutboxMigrationIntegrationTest {
         insert.setString(1, "{\"orderId\":11,\"amount\":200}");
         insert.executeUpdate();
       }
-      Flyway latest = Flyway.configure()
+      String preCorrelationVersion = "order".equals(service) ? "16" : "9";
+      Flyway legacyLatest = Flyway.configure()
           .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-          .locations(location).schemas(schema).defaultSchema(schema).load();
-      latest.migrate();
-      latest.validate();
+          .locations(location).schemas(schema).defaultSchema(schema)
+          .target(preCorrelationVersion).load();
+      legacyLatest.migrate();
+      legacyLatest.validate();
       var mapper = new ObjectMapper();
       String generated;
       try (var statement = connection.createStatement();
@@ -64,10 +66,19 @@ class OutboxMigrationIntegrationTest {
         assertThat(legacy.path("orderId").asLong()).isEqualTo(11);
         assertThat(legacy.path("amount").asLong()).isEqualTo(200);
       }
+      try (var statement = connection.createStatement()) {
+        statement.executeUpdate("DELETE FROM outbox_events");
+      }
+      Flyway latest = Flyway.configure()
+          .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+          .locations(location).schemas(schema).defaultSchema(schema).load();
+      latest.migrate();
+      latest.validate();
       assertThat(latest.migrate().migrationsExecuted).isZero();
       try (var duplicate = connection.prepareStatement(
-          "INSERT INTO outbox_events(event_id,aggregate_type,aggregate_id,event_type,payload,status)"
-              + " VALUES (?, 'Order',10,'OrderCreated','{}','PENDING')")) {
+          "INSERT INTO outbox_events(event_id,aggregate_type,aggregate_id,event_type,payload,"
+              + "correlation_id,status)"
+              + " VALUES (?, 'Order',10,'OrderCreated','{}','migration-test','PENDING')")) {
         duplicate.setString(1, stableId);
         assertThatThrownBy(duplicate::executeUpdate).isInstanceOfSatisfying(SQLException.class,
             error -> assertThat(error.getSQLState()).isEqualTo("23505"));

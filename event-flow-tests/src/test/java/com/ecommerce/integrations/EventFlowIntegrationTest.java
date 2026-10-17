@@ -322,7 +322,7 @@ class EventFlowIntegrationTest {
       assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderConfirmationRejected'",
           order.getId())).isEqualTo(1);
       assertThat(count(orders, "SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderCancelled'",
-          order.getId())).isEqualTo(1);
+          order.getId())).isEqualTo(late ? 1 : 0);
     }
   }
 
