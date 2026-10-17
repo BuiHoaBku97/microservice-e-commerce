@@ -57,6 +57,7 @@ public class OrderService {
   private final IdentityStatusClient identityStatusClient;
   private final DatabaseClock databaseClock;
   private final long paymentTimeoutSeconds;
+  private final long shippingFee;
   private final PaymentEventHistoryRepository paymentEventHistoryRepository;
   private final OrderStatusHistoryRepository orderStatusHistoryRepository;
 
@@ -72,7 +73,8 @@ public class OrderService {
       DatabaseClock databaseClock,
       PaymentEventHistoryRepository paymentEventHistoryRepository,
       OrderStatusHistoryRepository orderStatusHistoryRepository,
-      @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds) {
+      @Value("${app.order.payment-timeout-seconds:900}") long paymentTimeoutSeconds,
+      @Value("${app.order.shipping-fee:30000}") long shippingFee) {
     this.orderRepository = orderRepository;
     this.cartService = cartService;
     this.inventoryService = inventoryService;
@@ -86,12 +88,44 @@ public class OrderService {
     if (paymentTimeoutSeconds <= 0) {
       throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
     }
+    if (shippingFee < 0) {
+      throw new IllegalArgumentException("Phí vận chuyển không được âm");
+    }
     this.paymentTimeoutSeconds = paymentTimeoutSeconds;
+    this.shippingFee = shippingFee;
+  }
+
+  OrderService(
+      OrderRepository orderRepository,
+      CartService cartService,
+      InventoryService inventoryService,
+      OutboxEventService outboxEventService,
+      CatalogClient catalogClient,
+      IdentityClient identityClient,
+      IdentityStatusClient identityStatusClient,
+      DatabaseClock databaseClock,
+      PaymentEventHistoryRepository paymentEventHistoryRepository,
+      OrderStatusHistoryRepository orderStatusHistoryRepository,
+      long paymentTimeoutSeconds) {
+    this(
+        orderRepository,
+        cartService,
+        inventoryService,
+        outboxEventService,
+        catalogClient,
+        identityClient,
+        identityStatusClient,
+        databaseClock,
+        paymentEventHistoryRepository,
+        orderStatusHistoryRepository,
+        paymentTimeoutSeconds,
+        30_000L);
   }
 
   public Order createFromCart(Long userId) {
     Cart cart = cartService.getOrCreate(userId);
-    return createFromCart(cart, userId, null, null, null, null, null);
+    return createFromCart(
+        cart, userId, null, null, "MOCK_ONLINE", null, null, null, null);
   }
 
   public Order createFromCart(
@@ -102,6 +136,8 @@ public class OrderService {
         userId,
         checkoutRequest == null ? null : checkoutRequest.cartVersion(),
         checkoutRequest == null ? null : checkoutRequest.expectedItems(),
+        checkoutRequest == null ? "MOCK_ONLINE" : checkoutRequest.paymentMethod(),
+        checkoutRequest == null ? null : checkoutRequest.customerNote(),
         null,
         null,
         null);
@@ -148,6 +184,8 @@ public class OrderService {
             userId,
             checkoutRequest.cartVersion(),
             checkoutRequest.expectedItems(),
+            checkoutRequest.paymentMethod(),
+            checkoutRequest.customerNote(),
             normalizedKey,
             requestHash,
             checkoutContext),
@@ -159,6 +197,8 @@ public class OrderService {
       Long userId,
       Long expectedCartVersion,
       List<CartDtos.CheckoutItem> expectedItems,
+      String paymentMethod,
+      String customerNote,
       String idempotencyKey,
       String idempotencyHash,
       IdentityCheckoutContext checkoutContext) {
@@ -230,7 +270,7 @@ public class OrderService {
         throw new PriceChangedException();
       }
     }
-    long totalAmount =
+    long subtotal =
         cart.getItems().stream()
             .mapToLong(item -> catalogBySku.get(item.getSkuId()).unitPrice() * item.getQuantity())
             .sum();
@@ -240,7 +280,15 @@ public class OrderService {
         quantities,
         () -> {
           Instant paymentDueAt = databaseClock.deadlineAfter(paymentTimeoutSeconds);
-          Order order = new Order(userId, totalAmount, "VND", paymentDueAt);
+          Order order =
+              new Order(
+                  userId,
+                  subtotal,
+                  shippingFee,
+                  "VND",
+                  paymentMethod,
+                  normalizeCustomerNote(customerNote),
+                  paymentDueAt);
           if (idempotencyKey != null) {
             order.setIdempotency(idempotencyKey, idempotencyHash);
           }
@@ -261,8 +309,14 @@ public class OrderService {
                       order.addItem(
                           new OrderItem(
                               item.getSkuId(),
+                              catalogBySku.get(item.getSkuId()).productId(),
+                              catalogBySku.get(item.getSkuId()).skuCode(),
+                              catalogBySku.get(item.getSkuId()).productName(),
+                              catalogBySku.get(item.getSkuId()).color(),
+                              catalogBySku.get(item.getSkuId()).size(),
                               item.getQuantity(),
-                              catalogBySku.get(item.getSkuId()).unitPrice())));
+                              catalogBySku.get(item.getSkuId()).unitPrice(),
+                              catalogBySku.get(item.getSkuId()).currency())));
           Order savedOrder = orderRepository.save(order);
           orderRepository.flush();
           inventoryService.reserveInCurrentTransaction(
@@ -297,6 +351,10 @@ public class OrderService {
         request.cartVersion()
             + "|"
             + request.addressId()
+            + "|"
+            + request.paymentMethod()
+            + "|"
+            + normalizeCustomerNote(request.customerNote())
             + "|"
             + request.expectedItems().stream()
                 .sorted(Comparator.comparing(CartDtos.CheckoutItem::skuId))
@@ -501,6 +559,14 @@ public class OrderService {
       return "PAYMENT_CURRENCY_MISMATCH";
     }
     return null;
+  }
+
+  private String normalizeCustomerNote(String customerNote) {
+    if (customerNote == null) {
+      return null;
+    }
+    String normalized = customerNote.trim();
+    return normalized.isEmpty() ? null : normalized;
   }
 
   private void requireActiveAccount(Long userId) {

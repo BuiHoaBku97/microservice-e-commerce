@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
@@ -50,9 +51,14 @@ public final class CartDtos {
       Long id,
       String orderNumber,
       Long userId,
+      String salesChannel,
       OrderStatus status,
+      Long subtotal,
+      Long shippingFee,
       Long totalAmount,
       String currency,
+      String paymentMethod,
+      String customerNote,
       Long version,
       Instant createdAt,
       Instant paymentDueAt,
@@ -63,12 +69,22 @@ public final class CartDtos {
       Long addressId,
       String recipientName,
       String recipientPhone,
-      String ward,
       String addressLine,
+      String ward,
       String district,
       String province) {}
 
-  public record OrderItemResponse(Long skuId, Integer quantity, Long unitPrice, Long lineTotal) {}
+  public record OrderItemResponse(
+      Long skuId,
+      Long productId,
+      String skuCode,
+      String productName,
+      String color,
+      String size,
+      Integer quantity,
+      Long unitPrice,
+      Long lineTotal,
+      String currency) {}
 
   public record OrderStatusHistoryResponse(
       Long id, OrderStatus status, String source, String reason, Instant createdAt) {}
@@ -76,7 +92,14 @@ public final class CartDtos {
   public record CheckoutRequest(
       @NotNull Long cartVersion,
       @NotNull Long addressId,
-      @NotNull @jakarta.validation.constraints.NotEmpty List<@Valid CheckoutItem> expectedItems) {}
+      @NotBlank @Pattern(regexp = "MOCK_ONLINE") String paymentMethod,
+      @Size(max = 1000) String customerNote,
+      @NotNull @jakarta.validation.constraints.NotEmpty List<@Valid CheckoutItem> expectedItems) {
+    public CheckoutRequest(
+        Long cartVersion, Long addressId, List<CheckoutItem> expectedItems) {
+      this(cartVersion, addressId, "MOCK_ONLINE", null, expectedItems);
+    }
+  }
 
   public record CheckoutItem(
       @NotNull Long skuId,

@@ -80,6 +80,7 @@ $cart = Invoke-Json POST "/api/v1/cart/items?version=$($cart.version)" @{
 } $customerToken
 $order = Invoke-Json POST "/api/v1/orders/checkout" @{
   cartVersion=$cart.version;addressId=$address.id
+  paymentMethod="MOCK_ONLINE";customerNote="Compose smoke"
   expectedItems=@(@{skuId=$sku.id;quantity=1;expectedUnitPrice=125000})
 } $customerToken @{"Idempotency-Key"="$key-checkout"}
 $payment = Wait-Until {

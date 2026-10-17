@@ -40,15 +40,30 @@ public class Order {
   @Column(nullable = false)
   private Long userId;
 
+  @Column(name = "sales_channel", nullable = false, length = 20, updatable = false)
+  private String salesChannel = "WEB";
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   private OrderStatus status = OrderStatus.PENDING_PAYMENT;
 
-  @Column(nullable = false)
+  @Column(nullable = false, updatable = false)
+  private Long subtotal;
+
+  @Column(name = "shipping_fee", nullable = false, updatable = false)
+  private Long shippingFee;
+
+  @Column(nullable = false, updatable = false)
   private Long totalAmount;
 
   @Column(nullable = false, length = 3)
   private String currency = "VND";
+
+  @Column(name = "payment_method", nullable = false, length = 30, updatable = false)
+  private String paymentMethod = "MOCK_ONLINE";
+
+  @Column(name = "customer_note", length = 1000, updatable = false)
+  private String customerNote;
 
   @Column(nullable = false, updatable = false)
   private Instant paymentDueAt;
@@ -116,9 +131,24 @@ public class Order {
   private List<OrderItem> items = new ArrayList<>();
 
   public Order(Long userId, Long totalAmount, String currency, Instant paymentDueAt) {
+    this(userId, totalAmount, 0L, currency, "MOCK_ONLINE", null, paymentDueAt);
+  }
+
+  public Order(
+      Long userId,
+      Long subtotal,
+      Long shippingFee,
+      String currency,
+      String paymentMethod,
+      String customerNote,
+      Instant paymentDueAt) {
     this.userId = userId;
-    this.totalAmount = totalAmount;
+    this.subtotal = Objects.requireNonNull(subtotal, "subtotal");
+    this.shippingFee = Objects.requireNonNull(shippingFee, "shippingFee");
+    this.totalAmount = Math.addExact(subtotal, shippingFee);
     this.currency = currency;
+    this.paymentMethod = paymentMethod;
+    this.customerNote = customerNote;
     this.paymentDueAt = paymentDueAt;
   }
 

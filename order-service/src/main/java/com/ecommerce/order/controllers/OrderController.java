@@ -275,9 +275,14 @@ public class OrderController {
         order.getId(),
         order.getOrderNumber(),
         order.getUserId(),
+        order.getSalesChannel(),
         order.getStatus(),
+        order.getSubtotal(),
+        order.getShippingFee(),
         order.getTotalAmount(),
         order.getCurrency(),
+        order.getPaymentMethod(),
+        order.getCustomerNote(),
         order.getVersion(),
         order.getCreatedAt(),
         order.getPaymentDueAt(),
@@ -296,7 +301,16 @@ public class OrderController {
 
   private CartDtos.OrderItemResponse orderItemResponse(OrderItem item) {
     return new CartDtos.OrderItemResponse(
-        item.getSkuId(), item.getQuantity(), item.getUnitPrice(), item.getLineTotal());
+        item.getSkuId(),
+        item.getProductId(),
+        item.getSkuCode(),
+        item.getProductName(),
+        item.getColor(),
+        item.getSize(),
+        item.getQuantity(),
+        item.getUnitPrice(),
+        item.getLineTotal(),
+        item.getCurrency());
   }
 
   private CartDtos.OrderStatusHistoryResponse historyResponse(OrderStatusHistory history) {

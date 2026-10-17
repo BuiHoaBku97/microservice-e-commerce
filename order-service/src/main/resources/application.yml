@@ -40,7 +40,9 @@ app:
   active-account:
     enabled: ${ACTIVE_ACCOUNT_CHECK_ENABLED:true}
     identity-url: ${IDENTITY_INTERNAL_URL:http://localhost:8081}
-  order: {payment-expiry-scan-delay-ms: "${PAYMENT_EXPIRY_SCAN_DELAY_MS:30000}"}
+  order:
+    payment-expiry-scan-delay-ms: "${PAYMENT_EXPIRY_SCAN_DELAY_MS:30000}"
+    shipping-fee: "${ORDER_SHIPPING_FEE:30000}"
   clients:
     catalog:
       connect-timeout-ms: ${CATALOG_CONNECT_TIMEOUT_MS:2000}

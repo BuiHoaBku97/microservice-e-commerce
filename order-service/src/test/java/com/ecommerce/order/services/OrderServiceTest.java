@@ -88,8 +88,14 @@ class OrderServiceTest {
 
     Order order = orderService.createFromCart(7L);
 
-    assertEquals(300_000L, order.getTotalAmount());
+    assertEquals(300_000L, order.getSubtotal());
+    assertEquals(30_000L, order.getShippingFee());
+    assertEquals(330_000L, order.getTotalAmount());
+    assertEquals("WEB", order.getSalesChannel());
+    assertEquals("MOCK_ONLINE", order.getPaymentMethod());
     assertEquals(1, order.getItems().size());
+    assertEquals("SKU-10", order.getItems().getFirst().getSkuCode());
+    assertEquals("Sản phẩm", order.getItems().getFirst().getProductName());
     org.assertj.core.api.Assertions.assertThat(order.getPaymentDueAt()).isEqualTo(PAYMENT_DUE_AT);
     verify(inventoryService)
         .reserveInCurrentTransaction(any(), eq(Map.of(10L, 2)), eq(PAYMENT_DUE_AT), any());

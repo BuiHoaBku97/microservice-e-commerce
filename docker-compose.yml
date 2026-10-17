@@ -158,6 +158,7 @@ services:
       ORDER_DB_URL: jdbc:postgresql://postgres:5432/order_db
       ORDER_DB_USERNAME: order_user
       ORDER_DB_PASSWORD: order_password
+      ORDER_SHIPPING_FEE: ${ORDER_SHIPPING_FEE:-30000}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
