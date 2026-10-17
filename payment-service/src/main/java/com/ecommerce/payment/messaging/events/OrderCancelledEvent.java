@@ -27,13 +27,14 @@ public record OrderCancelledEvent(
   }
 
   public static OrderCancelledEvent from(JsonNode event) {
+    JsonNode payload = event.path("payload");
     try {
       return new OrderCancelledEvent(
           event.path("eventId").asText(),
-          event.hasNonNull("orderId") ? event.get("orderId").asLong() : null,
-          event.path("reason").asText(),
-          event.hasNonNull("occurredAt")
-              ? Instant.parse(event.get("occurredAt").asText())
+          payload.hasNonNull("orderId") ? payload.get("orderId").asLong() : null,
+          payload.path("reason").asText(),
+          payload.hasNonNull("cancelledAt")
+              ? Instant.parse(payload.get("cancelledAt").asText())
               : null,
           event.hasNonNull("aggregateVersion")
               ? event.get("aggregateVersion").asLong()

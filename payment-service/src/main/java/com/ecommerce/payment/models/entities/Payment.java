@@ -60,6 +60,8 @@ public class Payment {
 
   private Instant paidAt;
 
+  private Instant failedAt;
+
   @Column(length = 100)
   private String reviewReason;
 
@@ -139,6 +141,7 @@ public class Payment {
     if (fundsStatus == FundsStatus.RECEIVED) return;
     status = PaymentStatus.FAILED;
     failureReason = reason;
+    failedAt = Instant.now();
   }
 
   public void acceptOrder() {

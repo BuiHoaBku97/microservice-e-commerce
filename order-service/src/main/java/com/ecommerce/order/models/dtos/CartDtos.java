@@ -45,6 +45,7 @@ public final class CartDtos {
 
   public record OrderResponse(
       Long id,
+      String orderNumber,
       Long userId,
       OrderStatus status,
       Long totalAmount,

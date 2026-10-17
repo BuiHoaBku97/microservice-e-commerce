@@ -34,6 +34,9 @@ public class OutboxEvent {
   @Column(nullable = false, length = 80)
   private String eventType;
 
+  @Column(name = "correlation_id", nullable = false, length = 128)
+  private String correlationId;
+
   @Column(nullable = false, columnDefinition = "text")
   private String payload;
 
@@ -61,10 +64,21 @@ public class OutboxEvent {
 
   public OutboxEvent(
       String eventId, String aggregateType, Long aggregateId, String eventType, String payload) {
+    this(eventId, aggregateType, aggregateId, eventType, UUID.randomUUID().toString(), payload);
+  }
+
+  public OutboxEvent(
+      String eventId,
+      String aggregateType,
+      Long aggregateId,
+      String eventType,
+      String correlationId,
+      String payload) {
     this.eventId = eventId;
     this.aggregateType = aggregateType;
     this.aggregateId = aggregateId;
     this.eventType = eventType;
+    this.correlationId = correlationId;
     this.payload = payload;
     this.createdAt = Instant.now();
     this.updatedAt = this.createdAt;

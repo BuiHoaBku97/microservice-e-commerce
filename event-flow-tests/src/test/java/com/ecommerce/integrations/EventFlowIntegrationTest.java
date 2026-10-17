@@ -187,7 +187,7 @@ class EventFlowIntegrationTest {
         assertThat(count(payments, "SELECT count(*) FROM payments WHERE order_id=?", order.getId())).isEqualTo(1));
     submitSuccessfulPaymentCallback(order);
     String paymentPayload = jdbc(payments).queryForObject(
-        "SELECT payload FROM outbox_events WHERE payload::jsonb ->> 'orderId'=?", String.class,
+        "SELECT payload FROM outbox_events WHERE payload::jsonb -> 'payload' ->> 'orderId'=?", String.class,
         order.getId().toString());
     payments.getBean(com.ecommerce.payment.messaging.publishers.OutboxPublisher.class).publishPendingEvents();
     await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertStock(order, "CONFIRMED", 8, 0));
@@ -234,7 +234,7 @@ class EventFlowIntegrationTest {
       });
     }
     assertThat(count(payments, "SELECT count(*) FROM payments WHERE order_id=?", order.getId())).isEqualTo(1);
-    assertThat(count(payments, "SELECT count(*) FROM outbox_events WHERE payload::jsonb ->> 'orderId'=?",
+    assertThat(count(payments, "SELECT count(*) FROM outbox_events WHERE payload::jsonb -> 'payload' ->> 'orderId'=?",
         order.getId().toString())).isEqualTo(1);
     assertThat(count(notifications, "SELECT count(*) FROM notifications WHERE reference_id=?", order.getId()))
         .isEqualTo(3);
@@ -247,16 +247,20 @@ class EventFlowIntegrationTest {
     var payload = mapper.createObjectNode();
     payload.put("eventId", UUID.randomUUID().toString());
     payload.put("eventType", "PaymentFailed");
-    payload.put("aggregateType", "Payment");
+    payload.put("schemaVersion", 1);
+    payload.put("aggregateType", "PAYMENT");
     payload.put("aggregateId", order.getId() + 100000);
-    payload.put("paymentId", order.getId() + 100000);
-    payload.put("orderId", order.getId());
-    payload.put("userId", order.getUserId());
-    payload.put("amount", 100);
-    payload.put("currency", "VND");
-    payload.put("paymentDueAt", order.getPaymentDueAt().toString());
+    payload.put("aggregateVersion", 0);
     payload.put("occurredAt", Instant.now().toString());
-    payload.put("failureReason", "provider_declined");
+    payload.put("correlationId", UUID.randomUUID().toString());
+    var businessPayload = payload.putObject("payload");
+    businessPayload.put("paymentId", order.getId() + 100000);
+    businessPayload.put("orderId", order.getId());
+    businessPayload.put("userId", order.getUserId());
+    businessPayload.put("amount", 100);
+    businessPayload.put("currency", "VND");
+    businessPayload.put("failedAt", Instant.now().toString());
+    businessPayload.put("reason", "provider_declined");
     for (int i = 0; i < 2; i++) {
       template(payments).send(PAYMENT_TOPIC, order.getId().toString(), payload.toString())
           .get(10, TimeUnit.SECONDS);
@@ -283,7 +287,7 @@ class EventFlowIntegrationTest {
       for (int i = 0; i < 2; i++) {
         PaymentEvent callback = distinctEventIds && i == 1
             ? new PaymentEvent(UUID.randomUUID().toString(), event.eventType(), event.paymentId(),
-                event.orderId(), event.amount(), event.currency(), event.paymentDueAt(), null)
+                event.orderId(), event.amount(), event.currency(), null)
             : event;
         tasks.add(pool.submit(() -> {
           ready.countDown();
@@ -451,7 +455,7 @@ class EventFlowIntegrationTest {
 
   private PaymentEvent event(Order order, long amount) {
     return new PaymentEvent(UUID.randomUUID().toString(), "PaymentSucceeded",
-        order.getId() + 100000, order.getId(), amount, "VND", order.getPaymentDueAt(), null);
+        order.getId() + 100000, order.getId(), amount, "VND", null);
   }
 
   private void submitSuccessfulPaymentCallback(Order order) throws Exception {

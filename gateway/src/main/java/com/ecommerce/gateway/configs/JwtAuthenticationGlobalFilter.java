@@ -93,7 +93,11 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
   private Mono<Void> complete(
       ServerWebExchange exchange, HttpStatus status, String code, String message) {
     GatewayErrorResponse body =
-        new GatewayErrorResponse(code, message, null, exchange.getRequest().getId());
+        new GatewayErrorResponse(
+            code,
+            message,
+            null,
+            exchange.getRequest().getHeaders().getFirst(CorrelationIdGlobalFilter.HEADER));
     exchange.getResponse().setStatusCode(status);
     exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
     try {

@@ -2,6 +2,7 @@ package com.ecommerce.payment.messaging.publishers;
 
 import com.ecommerce.payment.models.entities.OutboxEvent;
 import com.ecommerce.payment.models.entities.OutboxStatus;
+import com.ecommerce.payment.configs.CorrelationContext;
 import com.ecommerce.payment.repositories.OutboxEventRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +49,7 @@ public class OutboxPublisher {
   }
 
   private void publish(OutboxEvent event) {
+    CorrelationContext.set(event.getCorrelationId());
     try {
       kafkaTemplate
           .send(paymentEventsTopic, partitionKey(event), event.getPayload())
@@ -62,6 +64,8 @@ public class OutboxPublisher {
       failed.increment();
       log.warn("outbox outcome=failed eventId={} aggregateId={} eventType={} attempts={}",
           event.getEventId(), event.getAggregateId(), event.getEventType(), event.getAttempts());
+    } finally {
+      CorrelationContext.clear();
     }
     outboxEventRepository.save(event);
   }
@@ -69,12 +73,13 @@ public class OutboxPublisher {
   private String partitionKey(OutboxEvent event) {
     try {
       JsonNode payload = objectMapper.readTree(event.getPayload());
-      JsonNode orderId = payload.get("orderId");
-      return orderId != null && !orderId.isNull()
-          ? orderId.asText()
-          : String.valueOf(event.getAggregateId());
+      JsonNode orderId = payload.path("payload").get("orderId");
+      if (orderId == null || !orderId.isIntegralNumber() || orderId.asLong() <= 0) {
+        throw new IllegalArgumentException("PAYMENT_EVENT_ORDER_ID_INVALID");
+      }
+      return orderId.asText();
     } catch (Exception exception) {
-      return String.valueOf(event.getAggregateId());
+      throw new IllegalStateException("PAYMENT_EVENT_PARTITION_KEY_INVALID", exception);
     }
   }
 }

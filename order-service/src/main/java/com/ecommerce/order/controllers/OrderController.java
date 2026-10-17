@@ -275,6 +275,7 @@ public class OrderController {
   private CartDtos.OrderResponse orderResponse(Order order) {
     return new CartDtos.OrderResponse(
         order.getId(),
+        order.getOrderNumber(),
         order.getUserId(),
         order.getStatus(),
         order.getTotalAmount(),

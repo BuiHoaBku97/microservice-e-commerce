@@ -18,6 +18,7 @@ class ActiveAccountFilterTest {
   @AfterEach
   void clearSecurityContext() {
     SecurityContextHolder.clearContext();
+    CorrelationContext.clear();
   }
 
   @Test

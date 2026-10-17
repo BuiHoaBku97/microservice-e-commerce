@@ -110,7 +110,11 @@ public class RateLimitGlobalFilter implements GlobalFilter, Ordered {
     }
     try {
       byte[] payload = objectMapper.writeValueAsBytes(
-          new GatewayErrorResponse(code, message, null, exchange.getRequest().getId()));
+          new GatewayErrorResponse(
+              code,
+              message,
+              null,
+              exchange.getRequest().getHeaders().getFirst(CorrelationIdGlobalFilter.HEADER)));
       DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(payload);
       return exchange.getResponse().writeWith(Mono.just(buffer));
     } catch (Exception exception) {

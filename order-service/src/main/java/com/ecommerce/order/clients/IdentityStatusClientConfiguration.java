@@ -1,6 +1,7 @@
 package com.ecommerce.order.clients;
 
 import com.ecommerce.order.configs.ServiceJwtProvider;
+import com.ecommerce.order.configs.CorrelationContext;
 import feign.Request;
 import feign.RequestInterceptor;
 import feign.Retryer;
@@ -24,9 +25,11 @@ public class IdentityStatusClientConfiguration {
 
   @Bean
   RequestInterceptor identityStatusServiceTokenInterceptor(ServiceJwtProvider serviceJwtProvider) {
-    return template ->
+    return template -> {
         template.header(
             "X-Service-Authorization",
             "Bearer " + serviceJwtProvider.issue("identity-service", "identity.status"));
+        template.header(CorrelationContext.HEADER, CorrelationContext.currentOrCreate());
+    };
   }
 }

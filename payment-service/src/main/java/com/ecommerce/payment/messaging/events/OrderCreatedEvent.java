@@ -10,7 +10,8 @@ public record OrderCreatedEvent(
     this(orderId, userId, totalAmount, currency, null);
   }
 
-  public static OrderCreatedEvent from(JsonNode payload) {
+  public static OrderCreatedEvent from(JsonNode envelope) {
+    JsonNode payload = envelope.path("payload");
     return new OrderCreatedEvent(
         payload.path("orderId").asLong(),
         payload.path("userId").asLong(),

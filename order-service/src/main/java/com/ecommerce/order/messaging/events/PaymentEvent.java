@@ -10,20 +10,29 @@ public record PaymentEvent(
     Long orderId,
     Long amount,
     String currency,
-    Instant paymentDueAt,
     String failureReason) {
-  public static PaymentEvent from(JsonNode payload) {
+  public PaymentEvent(
+      String eventId,
+      String eventType,
+      Long paymentId,
+      Long orderId,
+      Long amount,
+      String currency,
+      Instant ignoredPaymentDueAt,
+      String failureReason) {
+    this(eventId, eventType, paymentId, orderId, amount, currency, failureReason);
+  }
+
+  public static PaymentEvent from(JsonNode envelope) {
+    JsonNode payload = envelope.path("payload");
     return new PaymentEvent(
-        text(payload, "eventId"),
-        text(payload, "eventType"),
+        text(envelope, "eventId"),
+        text(envelope, "eventType"),
         number(payload, "paymentId"),
         number(payload, "orderId"),
         number(payload, "amount"),
         text(payload, "currency"),
-        payload.hasNonNull("paymentDueAt")
-            ? Instant.parse(payload.get("paymentDueAt").asText())
-            : null,
-        text(payload, "failureReason"));
+        text(payload, "reason"));
   }
 
   private static String text(JsonNode payload, String name) {

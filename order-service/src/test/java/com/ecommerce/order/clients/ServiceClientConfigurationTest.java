@@ -6,17 +6,25 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ecommerce.order.configs.ServiceJwtProvider;
+import com.ecommerce.order.configs.CorrelationContext;
 import feign.RequestTemplate;
 import java.util.Collection;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 
 class ServiceClientConfigurationTest {
+  @AfterEach
+  void clearCorrelation() {
+    CorrelationContext.clear();
+  }
+
   @Test
   void identityStatusClientUsesIdentityStatusScope() {
     ServiceJwtProvider provider = mock(ServiceJwtProvider.class);
     when(provider.issue("identity-service", "identity.status")).thenReturn("status-token");
     RequestTemplate template = new RequestTemplate();
+    CorrelationContext.set("identity-correlation");
 
     new IdentityStatusClientConfiguration()
         .identityStatusServiceTokenInterceptor(provider)
@@ -24,6 +32,8 @@ class ServiceClientConfigurationTest {
 
     assertThat(template.headers().get("X-Service-Authorization"))
         .containsExactly("Bearer status-token");
+    assertThat(template.headers().get(CorrelationContext.HEADER))
+        .containsExactly("identity-correlation");
     verify(provider).issue("identity-service", "identity.status");
   }
 
@@ -32,11 +42,13 @@ class ServiceClientConfigurationTest {
     ServiceJwtProvider provider = mock(ServiceJwtProvider.class);
     when(provider.issue("catalog-service", "catalog.checkout")).thenReturn("catalog-token");
     RequestTemplate template = new RequestTemplate();
+    CorrelationContext.set("catalog-correlation");
 
     new CatalogClientConfiguration().catalogServiceTokenInterceptor(provider).apply(template);
 
     Map<String, Collection<String>> headers = template.headers();
     assertThat(headers.get("X-Service-Authorization")).containsExactly("Bearer catalog-token");
+    assertThat(headers.get(CorrelationContext.HEADER)).containsExactly("catalog-correlation");
     assertThat(headers).doesNotContainKey("Authorization");
     assertThat(
             CatalogClient.class

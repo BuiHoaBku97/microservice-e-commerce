@@ -1,0 +1,2 @@
+ALTER TABLE outbox_events ADD COLUMN correlation_id VARCHAR(128) NOT NULL;
+ALTER TABLE payments ADD COLUMN failed_at TIMESTAMPTZ;

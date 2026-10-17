@@ -7,6 +7,7 @@ import com.ecommerce.order.clients.IdentityCheckoutContext;
 import com.ecommerce.order.clients.IdentityCheckoutContextRequest;
 import com.ecommerce.order.clients.IdentityClient;
 import com.ecommerce.order.clients.IdentityStatusClient;
+import com.ecommerce.order.configs.CorrelationContext;
 import com.ecommerce.order.exceptions.CatalogUnavailableException;
 import com.ecommerce.order.exceptions.IdempotencyKeyConflictException;
 import com.ecommerce.order.exceptions.IdentityUnavailableException;
@@ -354,9 +355,9 @@ public class OrderService {
               cancellationReason,
               operationId("cancel:" + order.getId() + ":" + cancellationReason));
           if ("PAYMENT_EXPIRED".equals(cancellationReason)) {
-            order.markPaymentExpired();
+            order.markPaymentExpired(decisionTime);
           } else {
-            order.cancel();
+            order.cancel(decisionTime);
           }
           Order savedOrder = orderRepository.save(order);
           recordStatus(savedOrder, "CUSTOMER_CANCEL", savedOrder.getCancellationReason());
@@ -380,12 +381,12 @@ public class OrderService {
           Instant decisionTime = databaseClock.now();
           String invalidReason = validatePayment(event, order, decisionTime);
           if (invalidReason != null) {
-            rejectPayment(order, event, invalidReason);
+            rejectPayment(order, event, invalidReason, decisionTime);
             return orderRepository.save(order);
           }
           inventoryService.commitInCurrentTransaction(
               event.orderId(), event.eventId(), operationId(event.eventId()));
-          order.confirm(event.paymentId());
+          order.confirm(event.paymentId(), decisionTime);
           paymentEventHistoryRepository.save(
               new PaymentEventHistory(
                   event.eventId(),
@@ -415,14 +416,14 @@ public class OrderService {
           Instant decisionTime = databaseClock.now();
           String invalidReason = validatePayment(event, order, decisionTime);
           if (invalidReason != null) {
-            rejectPayment(order, event, invalidReason);
+            rejectPayment(order, event, invalidReason, decisionTime);
             return orderRepository.save(order);
           }
           if (order.getStatus()
               == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
             inventoryService.releaseInCurrentTransaction(
                 event.orderId(), "PAYMENT_FAILED", operationId(event.eventId()));
-            order.markPaymentFailed();
+            order.markPaymentFailed(decisionTime);
           }
           paymentEventHistoryRepository.save(
               new PaymentEventHistory(
@@ -444,6 +445,8 @@ public class OrderService {
     List<Order> expiredOrders = orderRepository.findExpiredPendingOrders();
     int expiredCount = 0;
     for (Order candidateOrder : expiredOrders) {
+      CorrelationContext.set(UUID.randomUUID().toString());
+      try {
       Order orderSnapshot =
           orderRepository.findWithItemsById(candidateOrder.getId()).orElse(candidateOrder);
       Boolean paymentExpired =
@@ -459,7 +462,7 @@ public class OrderService {
                 }
                 inventoryService.releaseInCurrentTransaction(
                     order.getId(), "PAYMENT_EXPIRED", operationId("expiry:" + order.getId()));
-                order.markPaymentExpired();
+                order.markPaymentExpired(decisionTime);
                 Order savedOrder = orderRepository.save(order);
                 recordStatus(savedOrder, "PAYMENT_EXPIRY", savedOrder.getCancellationReason());
                 outboxEventService.enqueueOrderCancelled(savedOrder);
@@ -467,6 +470,9 @@ public class OrderService {
               });
       if (Boolean.TRUE.equals(paymentExpired)) {
         expiredCount++;
+      }
+      } finally {
+        CorrelationContext.clear();
       }
     }
     return expiredCount;
@@ -494,9 +500,6 @@ public class OrderService {
     if (!Objects.equals(event.currency(), order.getCurrency())) {
       return "PAYMENT_CURRENCY_MISMATCH";
     }
-    if (!Objects.equals(event.paymentDueAt(), order.getPaymentDueAt())) {
-      return "PAYMENT_DUE_AT_MISMATCH";
-    }
     return null;
   }
 
@@ -522,19 +525,20 @@ public class OrderService {
         && paymentEventHistoryRepository.existsByEventId(event.eventId());
   }
 
-  private void rejectPayment(Order order, PaymentEvent event, String reason) {
+  private void rejectPayment(
+      Order order, PaymentEvent event, String reason, Instant decisionTime) {
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.PENDING_PAYMENT) {
       String cancellationReason =
           "PAYMENT_EXPIRED".equals(reason) ? "PAYMENT_EXPIRED" : "PAYMENT_MISMATCH";
       inventoryService.releaseInCurrentTransaction(
           event.orderId(), cancellationReason, operationId(event.eventId()));
       if ("PAYMENT_EXPIRED".equals(reason)) {
-        order.markPaymentExpired();
+        order.markPaymentExpired(decisionTime);
+        outboxEventService.enqueueOrderCancelled(order);
       } else {
-        order.markPaymentMismatch();
+        order.markPaymentMismatch(decisionTime);
       }
       recordStatus(order, "PAYMENT_REJECTED", cancellationReason);
-      outboxEventService.enqueueOrderCancelled(order);
     }
     paymentEventHistoryRepository.save(
         new PaymentEventHistory(
@@ -577,7 +581,7 @@ public class OrderService {
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.SHIPPING) {
       return order;
     }
-    order.ship();
+    order.ship(databaseClock.now());
     Order savedOrder = orderRepository.save(order);
     recordStatus(savedOrder, "ADMIN_SHIP", null);
     outboxEventService.enqueueOrderShipping(savedOrder);
@@ -590,7 +594,7 @@ public class OrderService {
     if (order.getStatus() == com.ecommerce.order.models.entities.OrderStatus.COMPLETED) {
       return order;
     }
-    order.complete();
+    order.complete(databaseClock.now());
     Order savedOrder = orderRepository.save(order);
     recordStatus(savedOrder, "ADMIN_COMPLETE", null);
     outboxEventService.enqueueOrderCompleted(savedOrder);

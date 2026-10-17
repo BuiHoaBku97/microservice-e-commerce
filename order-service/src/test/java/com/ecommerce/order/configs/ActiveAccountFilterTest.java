@@ -22,6 +22,7 @@ class ActiveAccountFilterTest {
   @AfterEach
   void cleanup() {
     SecurityContextHolder.clearContext();
+    CorrelationContext.clear();
     if (server != null) {
       server.stop(0);
     }

@@ -20,7 +20,13 @@ class OrderEventConsumerTest {
   private final PaymentService service = mock(PaymentService.class);
   private final Acknowledgment acknowledgment = mock(Acknowledgment.class);
   private final OrderEventConsumer consumer = new OrderEventConsumer(new ObjectMapper(), service);
-  private static final String VALID_EVENT = "{\"eventId\":\"evt-1\",\"eventType\":\"OrderCreated\",\"occurredAt\":\"2026-10-12T10:00:00Z\",\"aggregateType\":\"Order\",\"aggregateId\":10,\"orderId\":10,\"userId\":1,\"totalAmount\":100000,\"currency\":\"VND\"}";
+  private static final String VALID_EVENT =
+      "{\"eventId\":\"evt-1\",\"eventType\":\"OrderCreated\",\"schemaVersion\":1,"
+          + "\"occurredAt\":\"2026-10-12T10:00:00Z\",\"aggregateType\":\"ORDER\","
+          + "\"aggregateId\":10,\"aggregateVersion\":1,\"correlationId\":\"corr-1\","
+          + "\"payload\":{\"orderId\":10,\"userId\":1,\"totalAmount\":100000,"
+          + "\"currency\":\"VND\",\"paymentDueAt\":\"2026-10-12T10:15:00Z\","
+          + "\"orderNumber\":\"ORD-000010\"}}";
 
   @Test
   void shouldAcknowledgeOnlyAfterServiceReturnsSuccessfully() {
@@ -64,7 +70,8 @@ class OrderEventConsumerTest {
   @Test
   void shouldUpdatePaymentWhenOrderIsConfirmed() {
     consumer.consume(VALID_EVENT.replace("OrderCreated", "OrderConfirmed")
-        .replace("\"orderId\":10", "\"orderId\":10,\"paymentId\":20"), acknowledgment);
+        .replace("\"orderId\":10", "\"orderId\":10,\"paymentId\":20,"
+            + "\"confirmedAt\":\"2026-10-12T10:00:00Z\""), acknowledgment);
     verify(service).handleOrderConfirmed(10L, 20L);
     verify(acknowledgment).acknowledge();
   }
@@ -72,8 +79,8 @@ class OrderEventConsumerTest {
   @Test
   void shouldUpdatePaymentWhenOrderIsCancelled() {
     consumer.consume(VALID_EVENT.replace("OrderCreated", "OrderCancelled")
-        .replace("\"aggregateId\":10", "\"aggregateId\":10,\"aggregateVersion\":1")
-        .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"PAYMENT_EXPIRED\""), acknowledgment);
+        .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"PAYMENT_EXPIRED\","
+            + "\"cancelledAt\":\"2026-10-12T10:15:00Z\""), acknowledgment);
     verify(service).handleOrderCancelled(any(OrderCancelledEvent.class));
     verify(acknowledgment).acknowledge();
   }
@@ -82,8 +89,8 @@ class OrderEventConsumerTest {
   void shouldNotAcknowledgeInvalidCancellationReason() {
     String event =
         VALID_EVENT.replace("OrderCreated", "OrderCancelled")
-            .replace("\"aggregateId\":10", "\"aggregateId\":10,\"aggregateVersion\":1")
-            .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"UNKNOWN\"");
+            .replace("\"orderId\":10", "\"orderId\":10,\"reason\":\"UNKNOWN\","
+                + "\"cancelledAt\":\"2026-10-12T10:15:00Z\"");
 
     assertThatThrownBy(() -> consumer.consume(event, acknowledgment))
         .isInstanceOf(IllegalStateException.class)
@@ -94,8 +101,12 @@ class OrderEventConsumerTest {
   @ParameterizedTest
   @ValueSource(strings = {"OrderShipping", "OrderCompleted"})
   void shouldAcknowledgeKnownUnrelatedEventWithoutChangingBusinessData(String eventType) {
+    String lifecycleField =
+        "OrderShipping".equals(eventType) ? "shippingAt" : "completedAt";
     consumer.consume(
-        VALID_EVENT.replace("OrderCreated", eventType),
+        VALID_EVENT.replace("OrderCreated", eventType)
+            .replace("\"orderId\":10", "\"orderId\":10,\"" + lifecycleField
+                + "\":\"2026-10-12T10:00:00Z\""),
         acknowledgment);
     verify(acknowledgment).acknowledge();
     verifyNoInteractions(service);

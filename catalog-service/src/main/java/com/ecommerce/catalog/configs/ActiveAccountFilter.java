@@ -58,6 +58,7 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
               .header(
                   "X-Service-Authorization",
                   "Bearer " + serviceJwtProvider.issue("identity-service", "identity.status"))
+              .header(CorrelationContext.HEADER, CorrelationContext.currentOrCreate())
               .GET()
               .build();
       HttpResponse<String> accountStatusResponse =

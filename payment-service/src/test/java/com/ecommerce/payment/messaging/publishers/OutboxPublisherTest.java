@@ -29,7 +29,7 @@ class OutboxPublisherTest {
 
   @Test
   void shouldResendSameIdentity_whenBrokerAckSucceedsButDatabaseSaveFails() {
-    String payload = "{\"eventId\":\"crash-event\",\"orderId\":10}";
+    String payload = "{\"eventId\":\"crash-event\",\"payload\":{\"orderId\":10}}";
     OutboxEvent first = new OutboxEvent("crash-event", "Payment", 20L,
         "PaymentSucceeded", payload);
     // Simulates loading the durable PENDING row after the previous save failed.
@@ -55,7 +55,7 @@ class OutboxPublisherTest {
   void shouldUseOrderIdAsKeyWhileKeepingStoredPaymentEventId() throws Exception {
     String payload =
         "{\"eventId\":\"payment-event-1\",\"eventType\":\"PaymentSucceeded\","
-            + "\"paymentId\":20,\"orderId\":10}";
+            + "\"payload\":{\"paymentId\":20,\"orderId\":10}}";
     OutboxEvent event = new OutboxEvent("payment-event-1", "Payment", 20L, "PaymentSucceeded", payload);
     when(repository.claimPendingBatch())
         .thenReturn(List.of(event));

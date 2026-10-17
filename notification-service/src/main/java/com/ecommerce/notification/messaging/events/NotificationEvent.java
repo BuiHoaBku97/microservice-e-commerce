@@ -22,9 +22,11 @@ public record NotificationEvent(
     this(null, userId, eventType, title, message, referenceType, referenceId, deduplicationKey);
   }
 
-  public static NotificationEvent from(JsonNode payload) {
-    String eventType = payload.path("eventType").asText();
-    String eventId = payload.hasNonNull("eventId") ? payload.get("eventId").asText() : null;
+  public static NotificationEvent from(JsonNode envelope) {
+    JsonNode payload = envelope.path("payload");
+    if (!payload.isObject()) throw new IllegalArgumentException("EVENT_PAYLOAD_REQUIRED");
+    String eventType = envelope.path("eventType").asText();
+    String eventId = envelope.hasNonNull("eventId") ? envelope.get("eventId").asText() : null;
     Long userId = payload.path("userId").asLong();
     Long orderId = payload.hasNonNull("orderId") ? payload.get("orderId").asLong() : null;
     Long referenceId =

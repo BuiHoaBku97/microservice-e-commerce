@@ -1,11 +1,13 @@
 package com.ecommerce.payment.messaging.consumers;
 
-import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
+import com.ecommerce.payment.configs.CorrelationContext;
 import com.ecommerce.payment.messaging.events.OrderCancelledEvent;
+import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
 import com.ecommerce.payment.services.PaymentService;
 import com.ecommerce.payment.services.ProcessedEventService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -21,70 +23,122 @@ public class OrderEventConsumer {
   }
 
   @org.springframework.beans.factory.annotation.Autowired
-  public OrderEventConsumer(
-      ObjectMapper objectMapper,
-      PaymentService paymentService,
+  public OrderEventConsumer(ObjectMapper objectMapper, PaymentService paymentService,
       ProcessedEventService processedEventService) {
     this.objectMapper = objectMapper;
     this.paymentService = paymentService;
     this.processedEventService = processedEventService;
   }
 
-  @KafkaListener(
-      topics = "${app.kafka.topics.order-events:ecommerce.order.events}",
+  @KafkaListener(topics = "${app.kafka.topics.order-events:ecommerce.order.events}",
       groupId = "${spring.kafka.consumer.group-id:payment-service}")
   public void consume(String message, Acknowledgment acknowledgment) {
     try {
-      JsonNode payload = objectMapper.readTree(message);
-      validateEnvelope(payload);
-      Runnable action = () -> handle(payload);
-      if (processedEventService == null) {
-        action.run();
-      } else {
-        processedEventService.process(
-            "payment-order-events",
-            payload.path("eventId").asText(),
-            payload.path("eventType").asText(),
-            action);
-      }
+      JsonNode envelope = objectMapper.readTree(message);
+      validateEnvelope(envelope);
+      CorrelationContext.set(envelope.get("correlationId").asText());
+      Runnable action = () -> handle(envelope);
+      if (processedEventService == null) action.run();
+      else processedEventService.process("payment-order-events",
+          envelope.get("eventId").asText(), envelope.get("eventType").asText(), action);
       acknowledgment.acknowledge();
     } catch (Exception exception) {
-      throw new IllegalStateException("Không thể xử lý sự kiện đơn hàng", exception);
+      throw new IllegalStateException("Khong the xu ly su kien don hang", exception);
+    } finally {
+      CorrelationContext.clear();
     }
   }
 
-  private void handle(JsonNode payload) {
-    switch (payload.path("eventType").asText()) {
-      case "OrderCreated" -> paymentService.processOrderPayment(OrderCreatedEvent.from(payload));
-      case "OrderConfirmed" ->
-          paymentService.handleOrderConfirmed(
-              payload.path("orderId").asLong(), payload.path("paymentId").asLong());
-      case "OrderCancelled" ->
-          paymentService.handleOrderCancelled(OrderCancelledEvent.from(payload));
-      case "OrderConfirmationRejected" ->
-          paymentService.handleOrderConfirmationRejected(
-              payload.path("orderId").asLong(),
-              payload.path("paymentId").asLong(),
-              payload.path("reason").asText());
-      case "OrderShipping", "OrderCompleted" -> {
-        // Các mốc giao hàng không thay đổi giao dịch thanh toán.
+  private void handle(JsonNode envelope) {
+    JsonNode payload = envelope.path("payload");
+    switch (envelope.path("eventType").asText()) {
+      case "OrderCreated" -> paymentService.processOrderPayment(OrderCreatedEvent.from(envelope));
+      case "OrderConfirmed" -> paymentService.handleOrderConfirmed(
+          requiredLong(payload, "orderId"), requiredLong(payload, "paymentId"));
+      case "OrderCancelled" -> paymentService.handleOrderCancelled(OrderCancelledEvent.from(envelope));
+      case "OrderConfirmationRejected" -> paymentService.handleOrderConfirmationRejected(
+          requiredLong(payload, "orderId"), requiredLong(payload, "paymentId"),
+          requiredText(payload, "reason"));
+      case "OrderShipping", "OrderCompleted" -> { }
+      default -> throw new IllegalArgumentException("ORDER_EVENT_TYPE_UNSUPPORTED");
+    }
+  }
+
+  private void validateEnvelope(JsonNode envelope) {
+    JsonNode payload = envelope.path("payload");
+    if (envelope.path("eventId").asText().isBlank()
+        || envelope.path("eventType").asText().isBlank()
+        || envelope.path("schemaVersion").asInt(0) != 1
+        || !"ORDER".equals(envelope.path("aggregateType").asText())
+        || envelope.path("aggregateId").asLong(0) <= 0
+        || envelope.path("aggregateVersion").asLong(-1) < 0
+        || !payload.isObject()
+        || requiredLong(payload, "orderId") != envelope.path("aggregateId").asLong()
+        || !CorrelationContext.isValid(envelope.path("correlationId").asText(null))) {
+      throw new IllegalArgumentException("ORDER_EVENT_ENVELOPE_INVALID");
+    }
+    try { Instant.parse(envelope.path("occurredAt").asText()); }
+    catch (Exception exception) {
+      throw new IllegalArgumentException("ORDER_EVENT_OCCURRED_AT_INVALID", exception);
+    }
+    switch (envelope.path("eventType").asText()) {
+      case "OrderCreated" -> {
+        requiredLong(payload, "userId");
+        requiredLong(payload, "totalAmount");
+        requiredText(payload, "currency");
+        requiredText(payload, "orderNumber");
+        requiredInstant(payload, "paymentDueAt");
       }
-      default -> throw new IllegalArgumentException("Loại sự kiện đơn hàng chưa được hỗ trợ");
+      case "OrderConfirmed" -> {
+        requiredLong(payload, "userId");
+        requiredLong(payload, "paymentId");
+        requiredLong(payload, "totalAmount");
+        requiredText(payload, "currency");
+        requiredInstant(payload, "confirmedAt");
+      }
+      case "OrderCancelled" -> {
+        requiredLong(payload, "userId");
+        requiredText(payload, "reason");
+        requiredInstant(payload, "cancelledAt");
+        requiredInstant(payload, "paymentDueAt");
+      }
+      case "OrderConfirmationRejected" -> {
+        requiredLong(payload, "paymentId");
+        requiredText(payload, "reason");
+        requiredText(payload, "currentOrderStatus");
+        requiredInstant(payload, "rejectedAt");
+      }
+      case "OrderShipping" -> {
+        requiredLong(payload, "userId");
+        requiredInstant(payload, "shippingAt");
+      }
+      case "OrderCompleted" -> {
+        requiredLong(payload, "userId");
+        requiredLong(payload, "totalAmount");
+        requiredText(payload, "currency");
+        requiredInstant(payload, "completedAt");
+      }
+      default -> throw new IllegalArgumentException("ORDER_EVENT_TYPE_UNSUPPORTED");
     }
   }
 
-  private void validateEnvelope(JsonNode payload) {
-    if (payload.path("eventId").asText().isBlank()
-        || payload.path("eventType").asText().isBlank()
-        || !"Order".equals(payload.path("aggregateType").asText())
-        || payload.path("aggregateId").asLong(0) != payload.path("orderId").asLong(0)
-        || !payload.hasNonNull("occurredAt")) {
-      throw new IllegalArgumentException("Envelope sự kiện đơn hàng không hợp lệ");
-    }
+  private long requiredLong(JsonNode node, String name) {
+    if (!node.has(name) || !node.get(name).isIntegralNumber() || node.get(name).asLong() <= 0)
+      throw new IllegalArgumentException("ORDER_EVENT_FIELD_INVALID:" + name);
+    return node.get(name).asLong();
+  }
+
+  private String requiredText(JsonNode node, String name) {
+    if (!node.hasNonNull(name) || node.get(name).asText().isBlank())
+      throw new IllegalArgumentException("ORDER_EVENT_FIELD_INVALID:" + name);
+    return node.get(name).asText();
+  }
+
+  private Instant requiredInstant(JsonNode node, String name) {
     try {
-      java.time.Instant.parse(payload.get("occurredAt").asText());
+      return Instant.parse(requiredText(node, name));
     } catch (Exception exception) {
-      throw new IllegalArgumentException("occurredAt không hợp lệ", exception);
+      throw new IllegalArgumentException("ORDER_EVENT_FIELD_INVALID:" + name, exception);
     }
   }
 }

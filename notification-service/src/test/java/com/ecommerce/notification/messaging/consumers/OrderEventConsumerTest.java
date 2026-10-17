@@ -17,7 +17,11 @@ class OrderEventConsumerTest {
   private final NotificationService service = mock(NotificationService.class);
   private final Acknowledgment acknowledgment = mock(Acknowledgment.class);
   private final OrderEventConsumer consumer = new OrderEventConsumer(new ObjectMapper(), service);
-  private static final String VALID_EVENT = "{\"eventType\":\"OrderCreated\",\"orderId\":10,\"userId\":1}";
+  private static final String VALID_EVENT =
+      "{\"eventId\":\"order-1\",\"eventType\":\"OrderCreated\",\"schemaVersion\":1,"
+          + "\"aggregateType\":\"ORDER\",\"aggregateId\":10,\"aggregateVersion\":0,"
+          + "\"occurredAt\":\"2026-10-17T10:00:00Z\",\"correlationId\":\"corr-1\","
+          + "\"payload\":{\"orderId\":10,\"userId\":1}}";
 
   @Test
   void shouldAcknowledgeOnlyAfterServiceReturnsSuccessfully() {
@@ -29,9 +33,7 @@ class OrderEventConsumerTest {
 
   @Test
   void shouldNotifyAndAcknowledgeOrderConfirmed() {
-    consumer.consume(
-        "{\"eventId\":\"order-confirmed-1\",\"eventType\":\"OrderConfirmed\",\"orderId\":10,\"userId\":1,\"status\":\"CONFIRMED\"}",
-        acknowledgment);
+    consumer.consume(VALID_EVENT.replace("OrderCreated", "OrderConfirmed"), acknowledgment);
 
     verify(service).createFromEvent(any());
     verify(acknowledgment).acknowledge();
@@ -69,18 +71,20 @@ class OrderEventConsumerTest {
   }
 
   @Test
-  void shouldNotifyOrderConfirmationRejected() {
-    consumer.consume(
-        "{\"eventId\":\"rejected-1\",\"eventType\":\"OrderConfirmationRejected\",\"orderId\":10,\"userId\":1}",
-        acknowledgment);
-    verify(service).createFromEvent(any());
-    verify(acknowledgment).acknowledge();
+  void shouldRejectOrderConfirmationRejectedBecauseItHasNoNotificationPayload() {
+    assertThatThrownBy(
+            () ->
+                consumer.consume(
+                    VALID_EVENT.replace("OrderCreated", "OrderConfirmationRejected"),
+                    acknowledgment))
+        .isInstanceOf(IllegalStateException.class);
+    verifyNoInteractions(service, acknowledgment);
   }
 
   @Test
   void shouldRejectOrderEventWithMissingIdentityWithoutAcknowledging() {
     assertThatThrownBy(
-            () -> consumer.consume("{\"eventType\":\"OrderConfirmed\",\"orderId\":10}", acknowledgment))
+            () -> consumer.consume(VALID_EVENT.replace("\"userId\":1", "\"missing\":1"), acknowledgment))
         .isInstanceOf(IllegalStateException.class);
     verifyNoInteractions(service);
     verifyNoInteractions(acknowledgment);

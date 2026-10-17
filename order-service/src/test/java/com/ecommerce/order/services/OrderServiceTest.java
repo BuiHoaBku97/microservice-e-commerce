@@ -337,7 +337,7 @@ class OrderServiceTest {
     verify(inventoryService)
         .releaseInCurrentTransaction(eq(3L), eq("PAYMENT_MISMATCH"), any());
     verify(inventoryService, never()).commitInCurrentTransaction(any(), any(), any());
-    verify(outboxEventService).enqueueOrderCancelled(order);
+    verify(outboxEventService, never()).enqueueOrderCancelled(order);
     verify(outboxEventService)
         .enqueueOrderConfirmationRejected(order, 21L, "PAYMENT_MISMATCH");
   }

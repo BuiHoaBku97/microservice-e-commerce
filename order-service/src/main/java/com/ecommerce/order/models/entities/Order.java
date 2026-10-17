@@ -21,6 +21,8 @@ import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 @Entity
 @Table(name = "orders")
@@ -30,6 +32,10 @@ public class Order {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
+
+  @Generated(event = EventType.INSERT)
+  @Column(name = "order_number", nullable = false, unique = true, length = 40, insertable = false, updatable = false)
+  private String orderNumber;
 
   @Column(nullable = false)
   private Long userId;
@@ -62,6 +68,12 @@ public class Order {
 
   @Column(name = "cancellation_reason", length = 50)
   private String cancellationReason;
+
+  @Column(name = "confirmed_at")
+  private Instant confirmedAt;
+
+  @Column(name = "cancelled_at")
+  private Instant cancelledAt;
 
   @Column(name = "shipping_at")
   private Instant shippingAt;
@@ -142,54 +154,59 @@ public class Order {
     this.shippingProvince = province;
   }
 
-  public void cancel() {
+  public void cancel(Instant decisionTime) {
     if (status != OrderStatus.PENDING_PAYMENT) {
       throw new IllegalStateException("ORDER_CANNOT_BE_CANCELLED");
     }
     status = OrderStatus.CANCELLED;
     cancellationReason = "CUSTOMER_CANCELLED";
+    cancelledAt = Objects.requireNonNull(decisionTime, "decisionTime");
   }
 
-  public void markPaymentFailed() {
+  public void markPaymentFailed(Instant decisionTime) {
     if (status == OrderStatus.PENDING_PAYMENT) {
       status = OrderStatus.CANCELLED;
       cancellationReason = "PAYMENT_FAILED";
+      cancelledAt = Objects.requireNonNull(decisionTime, "decisionTime");
     }
   }
 
-  public void markPaymentMismatch() {
+  public void markPaymentMismatch(Instant decisionTime) {
     if (status == OrderStatus.PENDING_PAYMENT) {
       status = OrderStatus.CANCELLED;
       cancellationReason = "PAYMENT_MISMATCH";
+      cancelledAt = Objects.requireNonNull(decisionTime, "decisionTime");
     }
   }
 
-  public void markPaymentExpired() {
+  public void markPaymentExpired(Instant decisionTime) {
     if (status == OrderStatus.PENDING_PAYMENT) {
       status = OrderStatus.CANCELLED;
       cancellationReason = "PAYMENT_EXPIRED";
+      cancelledAt = Objects.requireNonNull(decisionTime, "decisionTime");
     }
   }
 
-  public void confirm(Long paymentId) {
+  public void confirm(Long paymentId, Instant decisionTime) {
     if (status == OrderStatus.PENDING_PAYMENT) {
       status = OrderStatus.CONFIRMED;
       acceptedPaymentId = paymentId;
+      confirmedAt = Objects.requireNonNull(decisionTime, "decisionTime");
     }
   }
 
-  public void ship() {
+  public void ship(Instant decisionTime) {
     if (status == OrderStatus.SHIPPING) return;
     if (status != OrderStatus.CONFIRMED) throw new IllegalStateException("INVALID_STATE_TRANSITION");
     status = OrderStatus.SHIPPING;
-    shippingAt = Instant.now();
+    shippingAt = Objects.requireNonNull(decisionTime, "decisionTime");
   }
 
-  public void complete() {
+  public void complete(Instant decisionTime) {
     if (status == OrderStatus.COMPLETED) return;
     if (status != OrderStatus.SHIPPING) throw new IllegalStateException("INVALID_STATE_TRANSITION");
     status = OrderStatus.COMPLETED;
-    completedAt = Instant.now();
+    completedAt = Objects.requireNonNull(decisionTime, "decisionTime");
   }
 
   @PrePersist

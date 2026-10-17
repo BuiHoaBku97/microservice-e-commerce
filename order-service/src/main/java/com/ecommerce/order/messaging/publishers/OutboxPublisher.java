@@ -2,6 +2,7 @@ package com.ecommerce.order.messaging.publishers;
 
 import com.ecommerce.order.models.entities.OutboxEvent;
 import com.ecommerce.order.models.entities.OutboxStatus;
+import com.ecommerce.order.configs.CorrelationContext;
 import com.ecommerce.order.repositories.OutboxEventRepository;
 import java.util.List;
 import io.micrometer.core.instrument.Counter;
@@ -43,6 +44,7 @@ public class OutboxPublisher {
   }
 
   private void publish(OutboxEvent event) {
+    CorrelationContext.set(event.getCorrelationId());
     try {
       kafkaTemplate
           .send(orderEventsTopic, String.valueOf(event.getAggregateId()), event.getPayload())
@@ -57,6 +59,8 @@ public class OutboxPublisher {
       failed.increment();
       log.warn("outbox outcome=failed eventId={} aggregateId={} eventType={} attempts={}",
           event.getEventId(), event.getAggregateId(), event.getEventType(), event.getAttempts());
+    } finally {
+      CorrelationContext.clear();
     }
     outboxEventRepository.save(event);
   }
