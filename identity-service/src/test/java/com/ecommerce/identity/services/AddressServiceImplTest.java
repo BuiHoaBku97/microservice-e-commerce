@@ -2,6 +2,8 @@ package com.ecommerce.identity.services;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ecommerce.identity.models.dtos.responses.CheckoutContextResponse;
@@ -60,5 +62,22 @@ class AddressServiceImplTest {
     org.assertj.core.api.Assertions.assertThat(context.userId()).isEqualTo(7L);
     org.assertj.core.api.Assertions.assertThat(context.status()).isEqualTo(UserStatus.ACTIVE);
     org.assertj.core.api.Assertions.assertThat(context.address().province()).isEqualTo("TP HCM");
+  }
+
+  @Test
+  void deletingDefaultAddressShouldNotPromoteAnotherAddress() {
+    AddressRepository addresses = mock(AddressRepository.class);
+    UserRepository users = mock(UserRepository.class);
+    User user = new User("user@example.com", "hash", "User", java.util.Set.of());
+    Address address =
+        new Address(
+            7L, "Nguyễn Văn A", "0900000000", "1 Đường A", "Phường 1", "Quận 1", "TP HCM", true);
+    when(users.findById(7L)).thenReturn(Optional.of(user));
+    when(addresses.findByIdAndUserId(1L, 7L)).thenReturn(Optional.of(address));
+
+    new AddressServiceImpl(addresses, users).delete(7L, 1L);
+
+    verify(addresses).delete(address);
+    verify(addresses, never()).findByUserIdForUpdate(7L);
   }
 }

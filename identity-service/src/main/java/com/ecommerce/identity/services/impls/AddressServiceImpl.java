@@ -80,11 +80,6 @@ public class AddressServiceImpl implements AddressService {
     ensureActive(userId);
     Address address = getOwned(userId, addressId);
     addressRepository.delete(address);
-    if (address.isDefaultAddress()) {
-      addressRepository.findByUserIdForUpdate(userId).stream()
-          .findFirst()
-          .ifPresent(item -> item.setDefaultAddress(true));
-    }
   }
 
   @Override
