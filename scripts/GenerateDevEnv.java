@@ -44,6 +44,16 @@ public final class GenerateDevEnv {
         "KAFKA_PORT=9092",
         "REDIS_PORT=6379",
         "ELASTICSEARCH_PORT=9200",
+        "GRAFANA_PORT=3000",
+        "PROMETHEUS_PORT=9090",
+        "LOKI_PORT=3100",
+        "JAEGER_UI_PORT=16686",
+        "OTEL_GRPC_PORT=4317",
+        "OTEL_HTTP_PORT=4318",
+        "MANAGEMENT_TRACING_SAMPLING_PROBABILITY=1.0",
+        "MANAGEMENT_OTLP_TRACING_ENDPOINT=http://otel-collector:4318/v1/traces",
+        "GRAFANA_ADMIN_USER=admin",
+        "GRAFANA_ADMIN_PASSWORD=admin",
         "ORDER_SHIPPING_FEE=30000",
         "");
     if (output.getParent() != null) {

@@ -2,7 +2,9 @@ param(
   [string]$BaseUrl = "http://localhost:8080",
   [string]$AdminToken = $env:ADMIN_TOKEN,
   [string]$AdminEmail = $env:ADMIN_EMAIL,
-  [string]$AdminPassword = $env:ADMIN_PASSWORD
+  [string]$AdminPassword = $env:ADMIN_PASSWORD,
+  [ValidateSet("MOCK_ONLINE", "VNPAY")]
+  [string]$PaymentMethod = "MOCK_ONLINE"
 )
 $ErrorActionPreference = "Stop"
 
@@ -108,14 +110,29 @@ $cart = (Invoke-Json POST "/api/v1/cart/items?version=$($cart.version)" @{
 } $customerToken).data
 $order = (Invoke-Json POST "/api/v1/orders/checkout" @{
   cartVersion=$cart.version;addressId=$address.id
-  paymentMethod="MOCK_ONLINE";customerNote="Compose smoke"
+  paymentMethod=$PaymentMethod;customerNote="Compose smoke"
   expectedItems=@(@{skuId=$sku.id;quantity=1;expectedUnitPrice=125000})
 } $customerToken @{"Idempotency-Key"="$key-checkout"}).data
 $payment = Wait-Until {
   $candidate=(Invoke-Json GET "/api/v1/orders/$($order.id)/payment" $null $customerToken).data
   if ($candidate.id) { $candidate }
 } "payment creation"
-Invoke-Json POST "/api/v1/admin/demo/payments/$($payment.id)/simulate" @{result="SUCCESS"} $AdminToken | Out-Null
+$initialized = (Invoke-Json POST "/api/v1/orders/$($order.id)/payment/initialize" $null $customerToken).data
+if ($initialized.paymentMethod -ne $PaymentMethod) {
+  throw "Payment initialize returned $($initialized.paymentMethod), expected $PaymentMethod"
+}
+if ($PaymentMethod -eq "MOCK_ONLINE") {
+  if ($initialized.nextAction -ne "SIMULATE") { throw "Mock initialize did not return SIMULATE" }
+  Invoke-Json POST "/api/v1/admin/demo/payments/$($payment.id)/simulate" @{result="SUCCESS"} $AdminToken | Out-Null
+} else {
+  if ($initialized.nextAction -ne "REDIRECT" -or !$initialized.paymentUrl) {
+    throw "VNPay initialize did not return REDIRECT with paymentUrl"
+  }
+  Write-Host "VNPay initialize smoke passed for order $($order.id), payment $($payment.id)."
+  Write-Host "Redirect URL: $($initialized.paymentUrl)"
+  Invoke-Json POST "/api/v1/auth/logout" @{refreshToken=$rotated.refreshToken} | Out-Null
+  exit 0
+}
 $confirmedOrder = Wait-Until {
   $candidate=(Invoke-Json GET "/api/v1/orders/$($order.id)" $null $customerToken).data
   if ($candidate.status -eq "CONFIRMED") { $candidate }
@@ -139,4 +156,4 @@ if ($row.onHand -lt 0 -or $row.reserved -lt 0 -or $row.reserved -gt $row.onHand)
   throw "Inventory invariant failed"
 }
 Invoke-Json POST "/api/v1/auth/logout" @{refreshToken=$rotated.refreshToken} | Out-Null
-Write-Host "Full Compose smoke passed for order $($order.id), payment $($payment.id), SKU $($sku.id)."
+Write-Host "Full Compose smoke passed for $PaymentMethod order $($order.id), payment $($payment.id), SKU $($sku.id)."

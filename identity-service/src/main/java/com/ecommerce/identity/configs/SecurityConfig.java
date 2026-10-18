@@ -35,7 +35,7 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/api/v1/auth/**", "/actuator/health")
+                auth.requestMatchers("/api/v1/auth/**", "/actuator/health", "/actuator/prometheus")
                     .permitAll()
                     .requestMatchers(
                         HttpMethod.POST, "/internal/v1/users/current/checkout-context")

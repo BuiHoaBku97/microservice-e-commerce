@@ -61,5 +61,31 @@ python tools/generate_openapi.py
 python tools/check_openapi_coverage.py
 ```
 
+Generate and run the local Postman acceptance data:
+
+```powershell
+python tools/generate_postman.py
+```
+
+Import `docs/e-commerce.postman_collection.json` and
+`docs/e-commerce.postman_environment.json` into Postman, select the `E-commerce local`
+environment, then run the collection from the Collection Runner. Set `adminEmail` and
+`adminPassword` in the environment to the values from `.env` when they differ from the
+local defaults. The collection creates unique customer, catalog, inventory, cart, order,
+and payment data and carries response IDs and versions into later requests automatically.
+
 Default host ports are Gateway `8080`, Eureka `8761`, PostgreSQL `5433`, Kafka `9092`, Redis
 `6379`, and Elasticsearch `9200`. Application service ports remain inside the Compose network.
+
+## Observability
+
+The Compose stack also starts Prometheus, cAdvisor, Grafana, Loki, Grafana Alloy,
+OpenTelemetry Collector, and Jaeger. Open the Grafana dashboard at `http://localhost:3000`
+(default credentials are `admin`/`admin`), Prometheus at `http://localhost:9090`, and Jaeger at
+`http://localhost:16686`. Spring services expose `/actuator/prometheus` internally; CPU and
+memory panels come from cAdvisor. Application logs are collected from Docker stdout by Alloy
+and stored in Loki. Traces are exported over OTLP to the Collector and then Jaeger.
+
+Promtail is not used because it reached end of life on 2 March 2026; Alloy is its supported
+replacement. `orderId` and `correlationId` remain the business/log correlation fields. No
+`trace_id` database column is required.

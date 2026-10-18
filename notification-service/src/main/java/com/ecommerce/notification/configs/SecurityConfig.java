@@ -19,7 +19,7 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/actuator/health")
+                auth.requestMatchers("/actuator/health", "/actuator/prometheus")
                     .permitAll()
                     .requestMatchers("/api/v1/admin/**")
                     .hasAuthority("SCOPE_ADMIN")

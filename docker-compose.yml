@@ -219,6 +219,14 @@ services:
       PAYMENT_DB_USERNAME: payment_user
       PAYMENT_DB_PASSWORD: payment_password
       PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:?PAYMENT_CALLBACK_SECRET must be set}
+      VNPAY_ENABLED: ${VNPAY_ENABLED:-false}
+      VNPAY_PAY_URL: ${VNPAY_PAY_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-}
+      VNPAY_IPN_URL: ${VNPAY_IPN_URL:-}
+      VNPAY_FRONTEND_RESULT_URL: ${VNPAY_FRONTEND_RESULT_URL:-}
+      VNPAY_EXPIRE_MINUTES: ${VNPAY_EXPIRE_MINUTES:-15}
       JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
       SERVICE_JWT_PRIVATE_KEY_BASE64: ${PAYMENT_SERVICE_JWT_PRIVATE_KEY_BASE64:?PAYMENT_SERVICE_JWT_PRIVATE_KEY_BASE64 must be set}
       SERVICE_JWT_KEY_ID: ${PAYMENT_SERVICE_JWT_KEY_ID:-payment-service-key-1}
@@ -302,8 +310,92 @@ services:
       retries: 18
       start_period: 60s
 
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      gateway:
+        condition: service_healthy
+      cadvisor:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
+  loki:
+    image: grafana/loki:3.5.2
+    command: -config.file=/etc/loki/loki.yml
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./docker/observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+
+  alloy:
+    image: grafana/alloy:v1.8.3
+    command: run /etc/alloy/config.alloy
+    volumes:
+      - ./docker/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+
+  jaeger:
+    image: jaegertracing/jaeger:2.8.0
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    volumes:
+      - jaeger-data:/var/lib/jaeger
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.132.0
+    command: ["--config=/etc/otelcol/config.yml"]
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+    volumes:
+      - ./docker/observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
+    depends_on:
+      - jaeger
+
 volumes:
   postgres-data:
   kafka-data:
   redis-data:
   elasticsearch-data:
+  prometheus-data:
+  loki-data:
+  jaeger-data:
+  grafana-data:

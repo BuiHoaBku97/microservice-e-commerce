@@ -38,7 +38,7 @@ public class PaymentEventService {
                 payment.getUserId(),
                 payment.getAmount(),
                 payment.getCurrency(),
-                "MOCK",
+                payment.getPaymentMethod(),
                 payment.getProviderTransactionId(),
                 payment.getPaidAt())
             : new PaymentFailedPayload(

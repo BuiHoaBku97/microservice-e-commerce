@@ -4,3 +4,10 @@ spring:
 
 server:
   port: 8761
+
+management:
+  endpoints.web.exposure.include: health,prometheus
+  tracing:
+    sampling.probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
+management.otlp.tracing.endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://otel-collector:4318/v1/traces}
+logging.structured.format.console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:logstash}

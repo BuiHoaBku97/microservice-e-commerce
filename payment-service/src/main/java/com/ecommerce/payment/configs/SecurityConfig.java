@@ -28,11 +28,15 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/actuator/health")
+                auth.requestMatchers("/actuator/health", "/actuator/prometheus")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/payments/mock/callback")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/payments/vnpay/ipn", "/api/v1/payments/vnpay/return")
+                    .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/v1/orders/*/payment")
+                    .hasAuthority("SCOPE_CUSTOMER")
+                    .requestMatchers(HttpMethod.POST, "/api/v1/orders/*/payment/initialize")
                     .hasAuthority("SCOPE_CUSTOMER")
                     .requestMatchers("/api/v1/admin/**")
                     .hasAuthority("SCOPE_ADMIN")

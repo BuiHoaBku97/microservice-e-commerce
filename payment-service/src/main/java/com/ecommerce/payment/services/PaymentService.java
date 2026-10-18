@@ -74,7 +74,8 @@ public class PaymentService {
                 order.userId(),
                 order.totalAmount(),
                 order.currency(),
-                order.paymentDueAt());
+                order.paymentDueAt(),
+                order.paymentMethod());
     Payment saved = paymentRepository.save(payment);
     historyRepository.save(
         new PaymentStatusHistory(
@@ -89,7 +90,8 @@ public class PaymentService {
         || order.userId() == null || order.userId() <= 0
         || order.totalAmount() == null || order.totalAmount() <= 0
         || order.currency() == null || order.currency().isBlank()
-        || order.paymentDueAt() == null) {
+        || order.paymentDueAt() == null
+        || (!"MOCK_ONLINE".equals(order.paymentMethod()) && !"VNPAY".equals(order.paymentMethod()))) {
       throw new IllegalArgumentException("ORDER_CREATED_INVALID");
     }
   }

@@ -239,6 +239,7 @@ components:
           type: string
           enum:
           - MOCK_ONLINE
+          - VNPAY
         customerNote:
           type: string
           maxLength: 1000
@@ -2299,6 +2300,36 @@ paths:
           type: integer
           format: int64
           minimum: 1
+  /api/v1/orders/{orderId}/payment/initialize:
+    post:
+      operationId: initializeOrderPayment
+      summary: Initialize payment using the method selected at checkout
+      tags:
+      - Payment
+      responses:
+        '200':
+          description: Payment action to execute
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security: *id003
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
   /api/v1/admin/payments:
     get:
       operationId: listPayments
@@ -2524,6 +2555,30 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentCallbackRequest'
+  /api/v1/payments/vnpay/ipn:
+    get:
+      operationId: vnpayIpn
+      summary: Receive VNPay server-to-server payment notification
+      tags:
+      - Payment
+      responses:
+        '200':
+          description: VNPay acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+      security: []
+  /api/v1/payments/vnpay/return:
+    get:
+      operationId: vnpayReturn
+      summary: Return the customer browser from VNPay
+      tags:
+      - Payment
+      responses:
+        '302':
+          description: Redirect to frontend payment result
+      security: []
   /api/v1/admin/payments/outbox:
     get:
       operationId: listPaymentOutbox

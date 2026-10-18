@@ -47,7 +47,8 @@ class OutboxEventServiceTest {
     assertThat(json.path("payload").fieldNames())
         .toIterable()
         .containsExactlyInAnyOrder(
-            "orderId", "userId", "totalAmount", "currency", "paymentDueAt", "orderNumber");
+            "orderId", "userId", "totalAmount", "currency", "paymentDueAt", "orderNumber",
+            "paymentMethod");
     assertThat(json.path("payload").path("orderNumber").asText()).isEqualTo("ORD-000010");
   }
 

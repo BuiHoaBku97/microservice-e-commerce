@@ -44,6 +44,7 @@ final class ServiceContexts {
       com.ecommerce.order.services.DatabaseClock.class,
       com.ecommerce.order.services.InventoryService.class,
       com.ecommerce.order.services.OutboxEventService.class,
+      com.ecommerce.order.services.ProcessedEventService.class,
       com.ecommerce.order.messaging.publishers.OutboxPublisher.class,
       com.ecommerce.order.messaging.consumers.PaymentEventConsumer.class,
       com.ecommerce.order.configs.KafkaConsumerConfig.class})
@@ -66,6 +67,10 @@ final class ServiceContexts {
   @Configuration(proxyBeanMethods = false)
   @Import({Infrastructure.class, com.ecommerce.payment.services.PaymentService.class,
       com.ecommerce.payment.services.PaymentEventService.class,
+      com.ecommerce.payment.services.ProcessedEventService.class,
+      com.ecommerce.payment.services.VnpayService.class,
+      com.ecommerce.payment.services.VnpayCallbackService.class,
+      com.ecommerce.payment.configs.VnpayProperties.class,
       com.ecommerce.payment.messaging.publishers.OutboxPublisher.class,
       com.ecommerce.payment.messaging.consumers.OrderEventConsumer.class,
       com.ecommerce.payment.configs.KafkaConsumerConfig.class})
@@ -75,6 +80,7 @@ final class ServiceContexts {
 
   @Configuration(proxyBeanMethods = false)
   @Import({Infrastructure.class, com.ecommerce.notification.services.NotificationService.class,
+      com.ecommerce.notification.services.ProcessedEventService.class,
       com.ecommerce.notification.messaging.consumers.OrderEventConsumer.class,
       com.ecommerce.notification.messaging.consumers.PaymentEventConsumer.class,
       com.ecommerce.notification.configs.KafkaConsumerConfig.class})

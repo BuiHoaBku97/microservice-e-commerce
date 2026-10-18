@@ -37,6 +37,9 @@ public class Payment {
   @Column(nullable = false, length = 3)
   private String currency;
 
+  @Column(nullable = false, length = 30)
+  private String paymentMethod = "MOCK_ONLINE";
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   private PaymentStatus status = PaymentStatus.PENDING;
@@ -83,11 +86,17 @@ public class Payment {
   }
 
   public Payment(Long orderId, Long userId, Long amount, String currency, Instant paymentDueAt) {
+    this(orderId, userId, amount, currency, paymentDueAt, "MOCK_ONLINE");
+  }
+
+  public Payment(Long orderId, Long userId, Long amount, String currency, Instant paymentDueAt,
+      String paymentMethod) {
     this.orderId = orderId;
     this.userId = userId;
     this.amount = amount;
     this.currency = currency;
     this.paymentDueAt = paymentDueAt;
+    this.paymentMethod = paymentMethod;
   }
 
   public static Payment closedFromOrder(

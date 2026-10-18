@@ -27,7 +27,8 @@ public class OutboxEventService {
   public void enqueueOrderCreated(Order order) {
     enqueue("OrderCreated", order,
         new OrderCreatedPayload(order.getId(), order.getUserId(), order.getTotalAmount(),
-            order.getCurrency(), order.getPaymentDueAt(), order.getOrderNumber()), Instant.now());
+            order.getCurrency(), order.getPaymentDueAt(), order.getOrderNumber(),
+            order.getPaymentMethod()), Instant.now());
   }
 
   @Transactional

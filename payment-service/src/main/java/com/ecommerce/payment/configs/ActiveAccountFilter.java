@@ -10,6 +10,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +24,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
     havingValue = "true",
     matchIfMissing = true)
 public class ActiveAccountFilter extends OncePerRequestFilter {
+  private static final Logger log = LoggerFactory.getLogger(ActiveAccountFilter.class);
   private final ServiceJwtProvider serviceJwtProvider;
   private final HttpClient httpClient;
   private final String identityUrl;
@@ -67,6 +70,9 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
     }
     if (accountStatusResponse.statusCode() != 200
         || !"ACTIVE".equals(accountStatusResponse.body())) {
+      log.warn("Active account check failed path={} user={} identityStatus={} identityBody={}",
+          request.getRequestURI(), authentication.getName(), accountStatusResponse.statusCode(),
+          accountStatusResponse.body());
       JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE", request.getRequestId());
       return;
     }

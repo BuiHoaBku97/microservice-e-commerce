@@ -12,7 +12,7 @@ Nguyên tắc thực hiện:
 1. PostgreSQL là nguồn dữ liệu chuẩn; Redis và Elasticsearch chỉ là hạ tầng hỗ trợ.
 2. Mọi thay đổi tồn kho phải có ledger, idempotency và transaction rõ ràng.
 3. Cùng một order dùng `orderId` làm Kafka partition key; `eventId` dùng nhận diện lần phát cụ thể và chống xử lý trùng.
-4. Không bổ sung lại `correlationId` khi chưa có use case và consumer thực tế.
+4. Mọi request/causal execution dùng `correlationId`; ID này được truyền qua HTTP, Outbox và chuỗi Kafka trực tiếp.
 5. Migration phải tương thích dữ liệu đang có; tránh migration phá hủy hoặc yêu cầu xóa database.
 6. Mỗi batch phải chạy test của service bị sửa và test integration liên quan trước khi chuyển batch.
 7. Không tự động commit. Các mốc commit bên dưới chỉ là ranh giới đề xuất để người dùng duyệt và yêu cầu commit.
@@ -27,11 +27,45 @@ Nguyên tắc thực hiện:
 | 3 | P3 | Idempotent consumer và outbox recovery | Cao | P1 |
 | 4 | P4 | Elasticsearch, catalog indexing và reindex bền vững | Cao | P3 |
 | 5 | P5 | Service JWT cho internal API | Cao / M2 | P0; nên xong trước acceptance |
-| 6 | P6 | Kiểm tra trạng thái ACTIVE theo thời gian thực | Cao | P5 hoặc cơ chế introspection tương đương |
-| 7 | P7 | Hoàn thiện payment admin/report/attempt | Trung bình | P1-P3 |
+| 6 | P6 | Refresh session và trạng thái ACTIVE theo thời gian thực | Cao | P5 |
+| 7 | P7 | Hoàn thiện payment simulator và API quản trị theo contract | Trung bình | P1-P3 |
 | 8 | P8 | OpenAPI, Postman, load, chaos và Compose smoke | Nghiệm thu | P1-P7 |
 
 Không nên làm P4 trước P3 vì catalog indexer cần cơ chế xử lý event trùng và outbox recovery. Không nên làm load/chaos test trước khi P1 hoàn tất vì kết quả concurrency khi đó không đại diện cho thiết kế cuối.
+
+### 2.1. Ma trận truy vết plan về tài liệu nguồn
+
+Đường dẫn nguồn bên dưới được tính từ file plan này. Số dòng là vị trí tại thời điểm audit 2026-10-13; khi tài liệu nguồn thay đổi cần đối chiếu lại nội dung thay vì chỉ tin số dòng.
+
+| Phase | Cơ sở trong thiết kế/spec/requirement | Phân loại |
+|---|---|---|
+| P0 | [`IMPLEMENTATION_PLAN.md`](../../../IMPLEMENTATION_PLAN.md), dòng 23, 48-53, 233; yêu cầu đồng bộ contract, kiểm tra môi trường và báo cáo trạng thái kiểm thử | Quy trình triển khai suy ra từ kế hoạch, không phải chức năng nghiệp vụ |
+| P1 | [`DATABASE_DESIGN.md`](../../../DATABASE_DESIGN.md), dòng 193-205 và 232-239; [`BUSINESS_STATE_DESIGN.md`](../../../BUSINESS_STATE_DESIGN.md), dòng 20-42; [`BUSINESS_TEST_CHECKLIST.md`](../../../BUSINESS_TEST_CHECKLIST.md), INV-06..12 và STATE-12 | Requirement trực tiếp |
+| P2 | [`DATABASE_DESIGN.md`](../../../DATABASE_DESIGN.md), dòng 201-205; [`REST_API_CONTRACT.md`](../../../REST_API_CONTRACT.md), dòng 108-116; [`BUSINESS_TEST_CHECKLIST.md`](../../../BUSINESS_TEST_CHECKLIST.md), INV-01..14 | Requirement trực tiếp |
+| P3 | [`DATABASE_DESIGN.md`](../../../DATABASE_DESIGN.md), mục 7.1-7.2, dòng 304-330; [`KAFKA_EVENT_CONTRACT.md`](../../../KAFKA_EVENT_CONTRACT.md), dòng 3-23 và 79-84; [`BUSINESS_TEST_CHECKLIST.md`](../../../BUSINESS_TEST_CHECKLIST.md), EVT-03..11 | Requirement trực tiếp |
+| P4 | [`SYSTEM_DESIGN_REPORT.md`](../../../SYSTEM_DESIGN_REPORT.md), mục 12, dòng 307-322; [`REST_API_CONTRACT.md`](../../../REST_API_CONTRACT.md), dòng 66 và 80-84; [`DATABASE_DESIGN.md`](../../../DATABASE_DESIGN.md), dòng 135, 358-360 và 399; [`BUSINESS_TEST_CHECKLIST.md`](../../../BUSINESS_TEST_CHECKLIST.md), SEARCH-01..12 | Requirement trực tiếp |
+| P5 | [`REST_API_CONTRACT.md`](../../../REST_API_CONTRACT.md), dòng 9-11 và 168-177; [`IMPLEMENTATION_PLAN.md`](../../../IMPLEMENTATION_PLAN.md), dòng 53, 67 và 81; [`CODEX_PROJECT_CONTEXT.md`](../../../CODEX_PROJECT_CONTEXT.md), dòng 83-85 | Requirement trực tiếp, mục bảo mật M2 |
+| P6 bắt buộc | [`DATABASE_DESIGN.md`](../../../DATABASE_DESIGN.md), dòng 69-85; [`REST_API_CONTRACT.md`](../../../REST_API_CONTRACT.md), dòng 44 và 59; [`SYSTEM_DESIGN_REPORT.md`](../../../SYSTEM_DESIGN_REPORT.md), dòng 184-192; [`BUSINESS_TEST_CHECKLIST.md`](../../../BUSINESS_TEST_CHECKLIST.md), USR-09..13 | Requirement trực tiếp cho refresh session, logout và khóa tài khoản |
+| P6 logout tức thời | Tài liệu nguồn cho phép access token cũ còn hiệu lực đến hạn sau logout: [`SYSTEM_DESIGN_REPORT.md`](../../../SYSTEM_DESIGN_REPORT.md), dòng 192; [`BUSINESS_TEST_CHECKLIST.md`](../../../BUSINESS_TEST_CHECKLIST.md), USR-09 | Đề xuất mở rộng theo yêu cầu bổ sung, không thuộc Definition of Done bắt buộc |
+| P7 bắt buộc | [`REST_API_CONTRACT.md`](../../../REST_API_CONTRACT.md), dòng 143-154; [`BUSINESS_STATE_DESIGN.md`](../../../BUSINESS_STATE_DESIGN.md), dòng 44-83 | Requirement trực tiếp cho simulator, danh sách quản trị, report totals và review |
+| P7 payment attempts | Không tìm thấy payment-attempt entity/API trong tài liệu nguồn; `delivery_attempts` chỉ dành cho Notification tại [`DATABASE_DESIGN.md`](../../../DATABASE_DESIGN.md), dòng 297 | Đề xuất tùy chọn; phải cập nhật contract trước khi code |
+| P8 | [`SYSTEM_DESIGN_REPORT.md`](../../../SYSTEM_DESIGN_REPORT.md), dòng 8, 60-61 và 395-414; [`IMPLEMENTATION_PLAN.md`](../../../IMPLEMENTATION_PLAN.md), dòng 136-148; [`BUSINESS_TEST_CHECKLIST.md`](../../../BUSINESS_TEST_CHECKLIST.md), LOAD-01 và EVT/SEARCH failure cases | Requirement nghiệm thu trực tiếp |
+
+### 2.2. Các quyết định khác tài liệu nguồn đã biết
+
+- `correlationId` là field bắt buộc của envelope và cột `NOT NULL` trong Outbox Order/Payment. HTTP entry point tạo hoặc giữ ID hợp lệ; consumer khôi phục context trước khi xử lý event.
+- Logout tức thời bằng revocation cache không phải baseline đã chốt. Baseline chỉ thu hồi refresh session; access token cũ có thể sống đến `exp`, trừ trường hợp tài khoản bị khóa.
+- Payment attempts/retry chưa có contract. Không đưa vào phạm vi coding bắt buộc cho đến khi REST/database/state design được bổ sung.
+- `GET /admin/reports/payments` hiện không khai báo `from/to`; chỉ `GET /admin/payments` có filter ngày. Muốn thêm khoảng ngày cho report phải sửa REST contract trước.
+
+### 2.3. Chi tiết triển khai được suy ra để đáp ứng requirement
+
+Các mục sau không được tài liệu bắt buộc đúng tên class/bảng/thuật toán, nhưng là phương án triển khai của plan để đạt hành vi đã yêu cầu:
+
+- `InventoryCommandExecutor`, `InventoryTransactionalOperations` và `TransactionTemplate` là cách tổ chức code để đạt thứ tự Redis lock → DB transaction → unlock trong `DATABASE_DESIGN.md`, dòng 232-239. Tên class có thể đổi nhưng thứ tự và transaction boundary không được đổi.
+- Elasticsearch alias/checkpoint là cách đáp ứng yêu cầu rebuild không xóa index đang phục vụ và job phải phục hồi sau restart tại `REST_API_CONTRACT.md`, dòng 80-84. Có thể dùng cơ chế tương đương nếu vẫn version-safe và durable.
+- Service JWT dùng asymmetric signing, `kid`, key rotation và `jti` là thiết kế bảo mật cụ thể để thực hiện audience/scope/service identity. Requirement bắt buộc audience/scope và không dùng ADMIN token tĩnh; thuật toán cấp/rotate key cần được chốt trong M2 trước khi code.
+- Outbox API/command inspect/replay là công cụ vận hành cho quy trình DLT/redrive tại `KAFKA_EVENT_CONTRACT.md`, dòng 79-84; không được mở endpoint public tùy ý phát event.
 
 ## 3. P0 — Chốt baseline và ma trận truy vết
 
@@ -88,13 +122,14 @@ Thứ tự bắt buộc cho mọi lệnh tác động tồn kho:
 
 #### Schema
 
-Tạo migration inventory/order tùy ownership cuối cùng, ưu tiên inventory service sở hữu reservation:
+Tạo migration trong Order & Inventory service, đúng ownership tại `SYSTEM_DESIGN_REPORT.md` (không tách reservation sang database/service khác):
 
 - `reservations`
-  - `id` UUID/ULID;
-  - `order_id` unique;
-  - `status`: `ACTIVE`, `CONFIRMED`, `RELEASED`, `EXPIRED`;
+  - `id` bigint IDENTITY;
+  - `order_id` bigint unique;
+  - `status`: `ACTIVE`, `COMMITTED`, `RELEASED`;
   - `expires_at`;
+  - `committed_at`, `released_at`, `release_reason`;
   - `created_at`, `updated_at`, `version`.
 - `reservation_items`
   - `reservation_id`, `sku_id`;
@@ -109,16 +144,16 @@ Backfill dữ liệu order `PENDING_PAYMENT` hiện có nếu môi trường có
 - Tạo aggregate/repository cho reservation.
 - Thay các cập nhật `reserved` rời rạc bằng các operation:
   - `reserve(orderId, items, expiresAt)`;
-  - `confirm(orderId, paymentEventId)`;
+  - `commit(orderId, paymentEventId)`;
   - `release(orderId, reason, commandId)`;
-  - `expire(orderId, commandId)`.
+- Expiry dùng operation `release` với `release_reason = PAYMENT_EXPIRED`; không tạo trạng thái reservation `EXPIRED` riêng.
 - Mỗi operation kiểm tra state transition hợp lệ và trả kết quả idempotent nếu state đích đã đạt.
-- Không cho reservation `RELEASED` hoặc `EXPIRED` chuyển thành `CONFIRMED`.
+- Không cho reservation `RELEASED` chuyển thành `COMMITTED`, hoặc `COMMITTED` chuyển ngược trạng thái.
 
 #### Test
 
 - Reserve mới, reserve lặp cùng order, thiếu tồn kho, nhiều SKU.
-- Confirm làm `reserved -= quantity` và `on_hand -= quantity` đúng một lần.
+- Commit làm `reserved -= quantity` và `on_hand -= quantity` đúng một lần.
 - Release/expire chỉ giảm `reserved`.
 - Payment đến sau expiry không giảm `on_hand`.
 - Hai request reserve cùng SKU không gây oversell.
@@ -140,7 +175,7 @@ Backfill dữ liệu order `PENDING_PAYMENT` hiện có nếu môi trường có
 2. Hủy order/release.
 3. Worker expiry/release.
 4. Payment success/confirm stock.
-5. Payment failure/reject hoặc review mà không chốt stock.
+5. Payment failure hoặc Order từ chối confirmation; Payment có thể vào review nhưng không chốt stock.
 
 #### Test concurrency
 
@@ -157,14 +192,15 @@ Backfill dữ liệu order `PENDING_PAYMENT` hiện có nếu môi trường có
 
 | Trạng thái nguồn | Sự kiện | Trạng thái đích | Tồn kho |
 |---|---|---|---|
-| `PENDING_PAYMENT` | Payment hợp lệ, đúng hạn | `CONFIRMED` | Confirm reservation |
-| `PENDING_PAYMENT` | Payment sai dữ liệu | `PAYMENT_REVIEW` hoặc `REJECTED` theo policy | Không chốt |
-| `PENDING_PAYMENT` | Payment quá hạn | `PAYMENT_REVIEW`/`REJECTED` | Không chốt; reservation đã/được release |
-| `PENDING_PAYMENT` | Cancel | `CANCELLED` | Release reservation |
+| `PENDING_PAYMENT` | `PaymentSucceeded` hợp lệ, đúng hạn | `CONFIRMED` | Commit reservation |
+| `PENDING_PAYMENT` | `PaymentFailed` | `CANCELLED` với `PAYMENT_FAILED` | Release reservation |
+| `PENDING_PAYMENT` | Đến hạn hoặc xử lý payment success tại/sau hạn | `CANCELLED` với `PAYMENT_EXPIRED` | Release reservation; không giảm `onHand` |
+| `PENDING_PAYMENT` | Khách hủy trước hạn | `CANCELLED` với `CUSTOMER_CANCELLED` | Release reservation |
+| Bất kỳ trạng thái không thể nhận payment | Khoản tiền hợp lệ đã nhận nhưng Order từ chối | Order không mở lại; phát `OrderConfirmationRejected` | Không đổi kho; Payment chuyển `REQUIRES_REVIEW` |
 | `CONFIRMED` | Ship | `SHIPPING` | Không đổi |
 | `SHIPPING` | Complete | `COMPLETED` | Không đổi |
 
-Order history, payment history, reservation state và outbox event phải được ghi atomically trong service sở hữu chúng. Cross-service consistency dùng event và operation idempotent, không cố tạo distributed transaction.
+`REQUIRES_REVIEW` thuộc Payment, không phải trạng thái Order. Callback sai xác thực hoặc sai contract không được diễn giải thành tiền đã nhận. Order history, payment history, reservation state và outbox event phải được ghi atomically trong service sở hữu chúng. Cross-service consistency dùng event và operation idempotent, không cố tạo distributed transaction.
 
 ### Điều kiện hoàn tất P1
 
@@ -187,16 +223,16 @@ Order history, payment history, reservation state và outbox event phải đư�
 
 Tạo `stock_movements`:
 
-- `id`, `sku_id`, `type`;
-- `quantity_delta`, `on_hand_before`, `on_hand_after`;
-- `reserved_before`, `reserved_after`;
-- `reference_type`, `reference_id`;
-- `idempotency_key` hoặc `command_id`;
-- `reason`, `actor_type`, `actor_id`;
+- `id` bigint IDENTITY, `sku_id`, `movement_type`;
+- `on_hand_delta`, `reserved_delta`, `on_hand_after`, `reserved_after`;
+- `order_id`, `reservation_id` nullable;
+- `actor_user_id` nullable cho system consumer;
+- `source_event_id` nullable và `operation_id` UUID ổn định qua retry;
+- `reason`;
 - `created_at`;
-- unique constraint phù hợp, ví dụ `(operation, idempotency_key)` hoặc `(reference_type, reference_id, type, sku_id)`.
+- unique `(operation_id, sku_id, movement_type)`.
 
-Movement type tối thiểu: `INITIALIZE`, `RECEIPT`, `ADJUSTMENT`, `RESERVE`, `RELEASE`, `CONFIRM`, `EXPIRE`.
+Movement type theo database design: `INITIALIZE`, `RECEIPT`, `ADJUSTMENT`, `RESERVE`, `COMMIT`, `RELEASE`. Expiry được biểu diễn bằng `RELEASE` cùng lý do `PAYMENT_EXPIRED`.
 
 #### Quy tắc
 
@@ -220,11 +256,12 @@ Movement type tối thiểu: `INITIALIZE`, `RECEIPT`, `ADJUSTMENT`, `RESERVE`, `
 
 Hoàn thiện theo contract:
 
-- Danh sách inventory có phân trang và filter SKU/status.
+- Danh sách inventory có phân trang và filter `skuId` theo contract.
 - Initialize stock.
 - Goods receipt.
 - Adjustment với reason bắt buộc.
-- Danh sách stock movements theo SKU/type/date/reference.
+- Danh sách stock movements phân trang theo SKU.
+- Filter movement type/date/reference chỉ bổ sung sau khi REST contract định nghĩa.
 - Response không lộ internal exception hoặc secret.
 
 ### Test
@@ -252,16 +289,17 @@ Envelope giữ các trường thực sự được dùng:
 - `eventType`;
 - `aggregateType`;
 - `aggregateId`;
+- `aggregateVersion`;
 - `occurredAt`;
 - `schemaVersion`;
 - `payload`.
 
 Quy ước:
 
-- `aggregateId = orderId` cho chuỗi order/payment/notification liên quan order.
+- `aggregateId` là ID của aggregate phát event: Order dùng `orderId`, Payment dùng `paymentId`; không đồng nhất nó với Kafka key.
 - Kafka key = `orderId` để cùng order vào cùng partition.
 - `eventId` duy nhất cho một lần phát nghiệp vụ; retry publisher giữ nguyên `eventId`.
-- Không thêm `correlationId` vào lúc này.
+- Lưu `correlationId` trong Outbox và serialized envelope; publisher retry giữ nguyên cả `eventId`, correlation và JSON event.
 
 ### Batch P3-B — Processed event registry
 
@@ -314,7 +352,7 @@ Không đánh dấu processed trước mutation ở transaction khác. Business 
 #### Mapping
 
 - Document ID = `productId`.
-- Trường: name, normalized name, categoryId, imageUrl, minPrice, currency, productVersion, status.
+- Trường: name, normalized name, description, categoryId, imageUrl, SKU color/size phục vụ search, minPrice, currency, productVersion, status.
 - Analyzer hỗ trợ tiếng Việt và bỏ dấu theo thiết kế; kiểm thử các cặp có dấu/không dấu.
 - Index alias để migration mapping không làm gián đoạn search.
 
@@ -323,6 +361,7 @@ Không đánh dấu processed trước mutation ở transaction khác. Business 
 Hỗ trợ:
 
 - `q`, `categoryId`, `minPrice`, `maxPrice`;
+- `q` tìm trên tên/mô tả và các trường SKU được index theo policy SEARCH-01..04;
 - sort theo relevance/price/newest theo contract;
 - `page`, `size` với giới hạn size;
 - chỉ trả product searchable/active;
@@ -345,7 +384,7 @@ Xác định rõ policy khi Elasticsearch down: trả lỗi service unavailable 
 
 Tạo `catalog_reindex_jobs` với:
 
-- `job_id`, `status`, `requested_by`;
+- `id` bigint IDENTITY trả ra dưới tên `jobId`, `status`, `requested_by`;
 - `target_index`, `alias_name`;
 - total/processed/failed counts;
 - checkpoint/cursor;
@@ -421,7 +460,7 @@ Nếu internal operation cần biết customer:
 - Mọi internal call có audience/scope tối thiểu cần thiết.
 - Có tài liệu rotation và cấu hình môi trường.
 
-## 9. P6 — Trạng thái tài khoản ACTIVE theo thời gian thực
+## 9. P6 — Refresh session và trạng thái ACTIVE theo thời gian thực
 
 ### Batch P6-A — Account status history
 
@@ -435,54 +474,95 @@ Tạo `account_status_history`:
 
 Mọi lock/unlock/disable ghi user state và history trong cùng transaction.
 
-### Batch P6-B — Enforce current status
+### Batch P6-B — `session_id` cho refresh-token rotation và logout
 
-JWT còn hạn không được tiếp tục truy cập nếu tài khoản đã bị khóa. Có hai phương án triển khai, chọn một và ghi rõ policy:
+Baseline trong database/API design không yêu cầu bảng `auth_sessions`. Phiên đăng nhập được nhận diện bằng UUID `session_id` trên từng record `refresh_tokens`:
 
-1. Introspection qua identity service với cache TTL ngắn.
-2. Identity phát `UserStatusChanged`; gateway/service duy trì cache trạng thái có version và có fallback khi cache miss.
+- Login sinh `session_id` mới và lưu cùng refresh token đã hash.
+- Refresh khóa record token hiện tại, kiểm tra token chưa revoke/hết hạn và user còn `ACTIVE`.
+- Rotation tạo refresh token mới cùng `session_id`, liên kết `replaced_by_id` và revoke token cũ trong một transaction.
+- Logout tìm session từ refresh token và revoke toàn bộ refresh token còn hiệu lực có cùng `session_id`.
+- Logout lặp với token đã revoke trả `204`, không thêm tác động và không tiết lộ trạng thái session.
+- Access token không lưu trong database và có thể tiếp tục hợp lệ đến `exp` sau logout nếu tài khoản chưa bị khóa; đây là policy được chốt trong design.
 
-Thiết kế cần xác định:
+### Batch P6-C — Enforce trạng thái tài khoản hiện tại
 
-- TTL và mức trễ khóa tối đa;
-- fail-open hay fail-closed theo nhóm endpoint;
-- invalidation khi status thay đổi;
-- cách xử lý Identity/Redis down;
-- logout all sessions khi lock nếu requirement yêu cầu.
+JWT còn hạn không được tiếp tục truy cập nếu tài khoản đã bị khóa:
 
-### Test
+1. Gateway xác minh chữ ký, thời hạn, issuer/audience và quyền route tổng quát.
+2. Service đích gọi internal Identity status/checkout-context tại các protected business flow theo contract.
+3. Identity đọc trạng thái hiện tại từ PostgreSQL trong baseline demo; chưa cache để giữ hiệu lực khóa tức thời.
+4. Service từ chối khi user không còn `ACTIVE`; không tin `userId` tự khai từ client.
+5. Gateway không gọi Identity lặp lại trên mọi request chỉ để kiểm tra trạng thái.
 
+Cần chốt timeout/failure policy của internal Identity call. Với checkout, payment và admin write, không xác minh được trạng thái thì fail-closed.
+
+### Batch P6-D — Tùy chọn mở rộng: chặn access token ngay sau logout
+
+Batch này chỉ triển khai nếu requirement được thay đổi để logout phải vô hiệu hóa access token ngay lập tức. Nó không thuộc baseline hiện tại.
+
+Phương án đề xuất:
+
+- Tạo `auth_sessions` với `sid`, user, trạng thái, version và absolute expiry; access token mang claim `sid`/`jti`.
+- Redis cache trạng thái `auth:session:{sid}`; cache miss phải introspect Identity/PostgreSQL, không mặc định `ACTIVE`.
+- Logout revoke session và refresh token trong PostgreSQL, sau commit phát `SessionRevoked` qua outbox và cập nhật cache.
+- Gateway kiểm tra trạng thái session sau khi verify JWT; token có `sid` đã revoke bị từ chối dù `exp` còn hạn.
+- Redis và Identity cùng unavailable thì protected request fail-closed.
+
+Trước khi code batch tùy chọn này phải cập nhật `SYSTEM_DESIGN_REPORT.md`, `DATABASE_DESIGN.md`, `REST_API_CONTRACT.md` và test USR-09 để bỏ policy “access token cũ còn hiệu lực đến hạn”.
+
+### Test bắt buộc
+
+- Login tạo refresh token với `session_id` mới.
+- Refresh rotation giữ nguyên `session_id` và token cũ không refresh lại được.
+- Logout session A không ảnh hưởng session B của cùng user.
+- Logout lặp lại idempotent.
+- Race giữa refresh và logout chỉ cho một rotation hợp lệ.
+- Sau logout, refresh bị từ chối; access token cũ tuân theo policy còn hiệu lực đến `exp`.
 - Token phát khi ACTIVE, sau đó lock: request mới bị chặn trong SLA đã định.
 - Unlock khôi phục truy cập.
-- Event status giao trùng hoặc đảo thứ tự không rollback version.
-- Identity/Redis down tuân thủ failure policy.
+- Identity unavailable tuân thủ failure policy.
 - History đầy đủ actor và reason.
+
+### Test tùy chọn nếu triển khai P6-D
+
+- Logout làm access token còn hạn bị từ chối ngay.
+- Redis cache miss introspect Identity và cache lại kết quả.
+- Redis restart/mất key không làm session đã revoke được coi là ACTIVE.
+- `SessionRevoked` giao trùng hoặc đảo thứ tự không khôi phục session.
 
 ### Điều kiện hoàn tất P6
 
+- Refresh rotation và logout được ràng buộc bởi cùng `session_id` và transaction an toàn.
+- Logout thu hồi refresh session theo contract và idempotent.
 - Tất cả protected request áp dụng cùng một policy ACTIVE.
 - Có bằng chứng test cho trạng thái thay đổi sau khi JWT đã phát.
+- P6-D không chặn hoàn thành baseline nếu tài liệu nguồn chưa thay đổi policy logout.
 
-## 10. P7 — Hoàn thiện payment admin, report và attempt
+## 10. P7 — Hoàn thiện payment simulator và API quản trị theo contract
 
 ### Batch P7-A — Demo payment simulator
 
 - `POST /admin/demo/payments/{id}/simulate` theo contract.
 - Chỉ admin/demo profile được phép dùng; production profile vô hiệu hóa endpoint.
 - Simulator đi qua cùng callback validation/idempotency pipeline như provider thật.
-- Cho phép mô phỏng success, failed, wrong amount, wrong currency và delayed callback.
+- Simulator theo contract chỉ nhận `SUCCESS` hoặc `FAILED`.
 - Không sửa trực tiếp order/inventory để né pipeline.
 
-### Batch P7-B — Report filter
+Các case wrong amount, wrong currency và delayed callback được gửi trực tiếp vào mock callback để kiểm tra validation; không tự mở rộng request simulator khi contract chưa quy định.
 
-- Bổ sung `from`, `to`, status và phân trang cho payment report.
-- Chuẩn hóa timezone và khoảng ngày `[from, to)`.
+### Batch P7-B — Danh sách quản trị và report totals
+
+- `GET /admin/payments` hỗ trợ `status`, `orderId`, `userId`, `from`, `to`, `page`, `size`.
+- Chuẩn hóa timezone và khoảng ngày cho list filter.
+- `GET /admin/reports/payments` trả tách biệt `receivedAmount`, `acceptedAmount`, `requiresReviewAmount` trên phạm vi mà contract hiện định nghĩa.
 - Query có index phù hợp và không N+1.
 - Đối chiếu tổng accepted/rejected/review với payment history.
+- Không thêm `from/to` vào report nếu chưa cập nhật `REST_API_CONTRACT.md`.
 
-### Batch P7-C — Payment attempts và retry policy
+### Batch P7-C — Tùy chọn: Payment attempts và retry policy
 
-Xác nhận contract cuối, sau đó:
+Không triển khai batch này trong baseline vì tài liệu hiện tại không định nghĩa payment attempts. Chỉ thực hiện sau khi bổ sung API, schema và state contract; khi đó:
 
 - Persist attempt number, provider request/reference, status, failure code và timestamps.
 - Retry tạo attempt mới nhưng không tạo payment nghiệp vụ mới nếu cùng order/payment intent.
@@ -494,13 +574,15 @@ Xác nhận contract cuối, sau đó:
 - Simulator bị chặn ngoài demo profile.
 - Wrong amount/currency/late callback không chốt kho.
 - Hai callback đồng thời chỉ một callback được accepted.
-- Report date boundary/timezone.
-- Retry và callback đến đảo thứ tự.
+- Admin list kiểm tra date boundary/timezone và phân trang.
+- Report totals tách đúng tiền đã nhận, đã được Order chấp nhận và cần review.
+- Nếu triển khai P7-C: retry và callback đến đảo thứ tự.
 
 ### Điều kiện hoàn tất P7
 
-- Toàn bộ API payment trong contract có implementation và security phù hợp.
-- Báo cáo có filter đúng và reconciliation được với history.
+- Toàn bộ API payment hiện có trong contract có implementation và security phù hợp.
+- Danh sách quản trị có filter đúng; report totals reconciliation được với history.
+- P7-C không chặn hoàn thành baseline khi contract payment attempts chưa tồn tại.
 
 ## 11. P8 — Tài liệu API và nghiệm thu vận hành
 
@@ -573,7 +655,7 @@ Thực hiện lần lượt, không tắt nhiều dependency cùng lúc ở vòn
 | Event/outbox | Envelope/version | Claim/processed unique | Kafka replay | Crash/reclaim/order inversion |
 | Catalog search | Query builder | Job/checkpoint | PostgreSQL → ES | ES down, old version |
 | Internal auth | Claim validation | Key config | Caller → resource | Rotation, expired token |
-| Identity ACTIVE | Policy/version | Status history | Gateway/service enforcement | Status race, dependency down |
+| Identity refresh/ACTIVE | `session_id`, rotation, policy/version | Refresh/status history | Service → Identity status | Refresh/logout race, Identity down |
 | Payment | Callback validation | Accepted/history/attempt | Payment → order → inventory | Late/wrong/duplicate/concurrent |
 | Notification | Template/retry | Attempt/history | OrderConfirmed → delivery | Provider down/replay |
 
@@ -602,7 +684,7 @@ Hệ thống chỉ được coi là hoàn thiện coding và sẵn sàng nghiệ
 - Consumer replay an toàn; outbox/reindex có recovery khi worker chết.
 - Search chạy qua Elasticsearch với external version và reindex durable.
 - Internal API dùng service JWT audience/scope; user JWT không vượt qua internal boundary.
-- Account bị khóa bị chặn dù JWT cũ còn hạn.
+- Account lock chặn access token cũ dù JWT còn hạn; logout thu hồi refresh session theo policy đã chốt.
 - Payment wrong/late/duplicate/concurrent không chốt kho sai.
 - Full test suite, Compose smoke, load 100 users và chaos/recovery đạt tiêu chí.
 - OpenAPI, Postman, schema và tài liệu vận hành phản ánh đúng code thực tế.
@@ -617,8 +699,8 @@ Hệ thống chỉ được coi là hoàn thiện coding và sẵn sàng nghiệ
 6. P3-A envelope consistency, P3-B processed events, P3-C outbox recovery.
 7. P4-A search, P4-B indexer, P4-C reindex jobs.
 8. P5 service JWT.
-9. P6 ACTIVE enforcement.
-10. P7 payment gaps.
+9. P6 refresh session và ACTIVE enforcement; P6-D chỉ làm khi contract đổi.
+10. P7 simulator và API quản trị payment; P7-C chỉ làm khi có payment-attempt contract.
 11. P8 tài liệu và acceptance.
 
 Sau mỗi phase, cập nhật `docs/requirement-audit-2026-10-13.md` để trạng thái luôn phản ánh code và test hiện tại.

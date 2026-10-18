@@ -5,9 +5,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 
 public record OrderCreatedEvent(
-    Long orderId, Long userId, Long totalAmount, String currency, Instant paymentDueAt) {
+    Long orderId, Long userId, Long totalAmount, String currency, Instant paymentDueAt,
+    String paymentMethod) {
   public OrderCreatedEvent(Long orderId, Long userId, Long totalAmount, String currency) {
-    this(orderId, userId, totalAmount, currency, null);
+    this(orderId, userId, totalAmount, currency, null, "MOCK_ONLINE");
+  }
+
+  public OrderCreatedEvent(Long orderId, Long userId, Long totalAmount, String currency,
+      Instant paymentDueAt) {
+    this(orderId, userId, totalAmount, currency, paymentDueAt, "MOCK_ONLINE");
   }
 
   public static OrderCreatedEvent from(JsonNode envelope) {
@@ -19,6 +25,7 @@ public record OrderCreatedEvent(
         payload.path("currency").asText("VND"),
         payload.hasNonNull("paymentDueAt")
             ? Instant.parse(payload.get("paymentDueAt").asText())
-            : null);
+            : null,
+        payload.path("paymentMethod").asText("MOCK_ONLINE"));
   }
 }

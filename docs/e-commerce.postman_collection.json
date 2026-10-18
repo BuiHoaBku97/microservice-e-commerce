@@ -1,11 +1,1100 @@
 {
-  "info": {"name": "E-commerce acceptance", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "info": {
+    "name": "E-commerce - Local acceptance flow",
+    "description": "Dữ liệu test chạy tuần tự cho API trong docs/openapi.yaml. Chọn environment 'E-commerce local', chạy collection từ trên xuống bằng Collection Runner. Collection tự tạo email/code duy nhất và lưu token, ID, version từ response. Postman gọi Gateway tại localhost:8080; service ID identity-service chỉ là định danh Eureka nội bộ và không thêm vào URL.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('runId')) {",
+          "  const runId = Date.now() + '-' + Math.floor(Math.random() * 10000);",
+          "  pm.environment.set('runId', runId);",
+          "  if (!pm.environment.get('customerEmail')) {",
+          "    pm.environment.set('customerEmail', `postman-${runId}@example.test`);",
+          "  }",
+          "  pm.environment.set('categoryCode', `PM-${runId}`);",
+          "  pm.environment.set('categorySlug', `postman-${runId}`);",
+          "  pm.environment.set('skuCode', `PM-SKU-${runId}`);",
+          "  pm.environment.set('inventoryInitKey', `postman-${runId}-init`);",
+          "  pm.environment.set('inventoryReceiptKey', `postman-${runId}-receipt`);",
+          "  pm.environment.set('checkoutKey', `postman-${runId}-checkout`);",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
-    {"name": "Login", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"{{customerEmail}}\",\"password\":\"{{customerPassword}}\"}"}, "url": "{{baseUrl}}/api/v1/auth/login"}, "event": [{"listen": "test", "script": {"exec": ["const b=pm.response.json().data; pm.environment.set('customerToken',b.accessToken); pm.environment.set('refreshToken',b.refreshToken);"]}}]},
-    {"name": "Search without accents", "request": {"method": "GET", "url": "{{baseUrl}}/api/v1/products/search?q=ao&page=0&size=20"}},
-    {"name": "Checkout", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{customerToken}}"}, {"key": "Idempotency-Key", "value": "{{$guid}}"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"cartVersion\":{{cartVersion}},\"addressId\":{{addressId}},\"paymentMethod\":\"MOCK_ONLINE\",\"customerNote\":\"Postman acceptance\",\"expectedItems\":[{\"skuId\":{{skuId}},\"quantity\":1,\"expectedUnitPrice\":{{unitPrice}}}]}"}, "url": "{{baseUrl}}/api/v1/orders/checkout"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('Checkout created',()=>pm.response.to.have.status(201));", "const order=pm.response.json().data; pm.expect(order.salesChannel).to.eql('WEB'); pm.expect(order.totalAmount).to.eql(order.subtotal+order.shippingFee); pm.environment.set('orderId',order.id);"]}}]},
-    {"name": "Simulate payment success", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"result\":\"SUCCESS\"}"}, "url": "{{baseUrl}}/api/v1/admin/demo/payments/{{paymentId}}/simulate"}},
-    {"name": "Duplicate inventory receipt", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Idempotency-Key", "value": "receipt-replay"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"quantity\":10,\"reason\":\"acceptance\"}"}, "url": "{{baseUrl}}/api/v1/admin/inventory/{{skuId}}/receipts"}},
-    {"name": "Locked account negative flow", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{adminToken}}"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"reason\":\"acceptance\",\"version\":{{userVersion}}}"}, "url": "{{baseUrl}}/api/v1/admin/users/{{customerId}}/lock"}}
+    {
+      "name": "00 - Authentication",
+      "description": "Tạo customer mới và lấy JWT cho customer lẫn admin.",
+      "item": [
+        {
+          "name": "Register unique customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\",\n  \"fullName\": \"Postman Test Customer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('customerId', data.id);",
+                  "pm.environment.set('userVersion', data.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('customerToken', data.accessToken);",
+                  "pm.environment.set('refreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh customer token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('customerToken', data.accessToken);",
+                  "pm.environment.set('refreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "adminEmail/adminPassword phải trùng ADMIN_EMAIL/ADMIN_PASSWORD trong file .env của Docker Compose."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('adminToken', data.accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Customer and address",
+      "item": [
+        {
+          "name": "Get current customer",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/users/me"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('customerId', data.id);",
+                  "pm.environment.set('userVersion', data.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create shipping address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/users/me/addresses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientName\": \"Nguyen Van Postman\",\n  \"recipientPhone\": \"0900000000\",\n  \"addressLine\": \"1 Nguyen Hue\",\n  \"ward\": \"Ben Nghe\",\n  \"district\": \"District 1\",\n  \"province\": \"Ho Chi Minh City\",\n  \"defaultAddress\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('addressId', data.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Admin catalog and inventory",
+      "description": "Tạo riêng category, product và SKU cho mỗi lần chạy để không phụ thuộc dữ liệu cũ.",
+      "item": [
+        {
+          "name": "Create category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{categoryCode}}\",\n  \"name\": \"Postman Category {{runId}}\",\n  \"slug\": \"{{categorySlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('categoryId', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": {{categoryId}},\n  \"name\": \"Postman Shirt {{runId}}\",\n  \"description\": \"Product generated by the Postman acceptance flow\",\n  \"imageUrls\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('productId', data.id);",
+                  "pm.environment.set('productVersion', data.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create SKU",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/products/{{productId}}/skus",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{skuCode}}\",\n  \"color\": \"black\",\n  \"size\": \"M\",\n  \"price\": {{unitPrice}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('skuId', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get product version",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/products/{{productId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('productVersion', data.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activate product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/products/{{productId}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\",\n  \"version\": {{productVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('productVersion', data.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Initialize inventory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inventoryInitKey}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/inventory/{{skuId}}/initialize"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Receive inventory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inventoryReceiptKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/inventory/{{skuId}}/receipts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": {{stockQuantity}},\n  \"reason\": \"Postman test stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('inventoryVersion', data.version);",
+                  "pm.environment.set('inventoryOnHand', data.onHand);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replay same receipt (idempotency test)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inventoryReceiptKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/inventory/{{skuId}}/receipts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": {{stockQuantity}},\n  \"reason\": \"Postman test stock\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('Stock was not added twice', () => pm.expect(String(data.onHand)).to.eql(pm.environment.get('inventoryOnHand')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Check public availability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/inventory/availability?skuIds={{skuId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().data;",
+                  "pm.test('SKU is available', () => pm.expect(rows[0].available).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Cart, checkout and payment",
+      "item": [
+        {
+          "name": "Get empty cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/cart"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('cartVersion', data.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add SKU to cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/cart/items?version={{cartVersion}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skuId\": {{skuId}},\n  \"quantity\": 1,\n  \"displayedUnitPrice\": {{unitPrice}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('cartVersion', data.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{checkoutKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders/checkout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cartVersion\": {{cartVersion}},\n  \"addressId\": {{addressId}},\n  \"paymentMethod\": \"{{paymentMethod}}\",\n  \"customerNote\": \"Created from Postman\",\n  \"expectedItems\": [\n    {\n      \"skuId\": {{skuId}},\n      \"quantity\": 1,\n      \"expectedUnitPrice\": {{unitPrice}}\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('orderId', data.id);",
+                  "pm.environment.set('orderVersion', data.version);",
+                  "pm.test('Order total is correct', () => pm.expect(data.totalAmount).to.eql(data.subtotal + data.shippingFee));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get payment (wait for async creation)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/payment",
+            "description": "Trong Collection Runner, request tự thử lại tối đa 10 lần vì payment được tạo bất đồng bộ qua Kafka."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retry = Number(pm.environment.get('paymentRetry') || 0);",
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json().data;",
+                  "  pm.environment.set('paymentId', data.id);",
+                  "  pm.environment.unset('paymentRetry');",
+                  "  pm.test('Payment was created', () => pm.expect(data.id).to.exist);",
+                  "} else if (retry < 10) {",
+                  "  pm.environment.set('paymentRetry', retry + 1);",
+                  "  pm.execution.setNextRequest('Get payment (wait for async creation)');",
+                  "  setTimeout(() => {}, 1000);",
+                  "} else {",
+                  "  pm.test('Payment was created within 10 retries', () => pm.expect.fail(`Last HTTP status: ${pm.response.code}`));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Initialize payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/payment/initialize",
+            "description": "Dùng cho cả MOCK_ONLINE và VNPAY. MOCK_ONLINE trả nextAction=SIMULATE; VNPAY trả nextAction=REDIRECT và paymentUrl. Với VNPAY, mở paymentUrl trên trình duyệt và không chạy request simulate."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('Payment method matches environment', () => pm.expect(data.paymentMethod).to.eql(pm.environment.get('paymentMethod')));",
+                  "if (pm.environment.get('paymentMethod') === 'VNPAY') {",
+                  "  pm.test('VNPay returns redirect URL', () => { pm.expect(data.nextAction).to.eql('REDIRECT'); pm.expect(data.paymentUrl).to.be.a('string').and.not.empty; });",
+                  "  pm.environment.set('paymentUrl', data.paymentUrl);",
+                  "} else {",
+                  "  pm.test('Mock returns simulate action', () => pm.expect(data.nextAction).to.eql('SIMULATE'));",
+                  "}",
+                  "pm.test('Payment initialize response is visible', () => pm.expect(data.paymentId).to.exist);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simulate successful payment (MOCK_ONLINE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/demo/payments/{{paymentId}}/simulate",
+            "description": "Chỉ chạy khi paymentMethod=MOCK_ONLINE. Nếu chọn VNPAY, bỏ qua request này, mở {{paymentUrl}} và chờ IPN/Return.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"result\": \"SUCCESS\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('paymentMethod') === 'VNPAY') { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get confirmed order (wait for async update)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "const retry = Number(pm.environment.get('orderRetry') || 0);",
+                  "if (data.status === 'CONFIRMED') {",
+                  "  pm.environment.set('orderVersion', data.version);",
+                  "  pm.environment.unset('orderRetry');",
+                  "  pm.test('Order is confirmed', () => pm.expect(data.status).to.eql('CONFIRMED'));",
+                  "} else if (retry < 10) {",
+                  "  pm.environment.set('orderRetry', retry + 1);",
+                  "  pm.execution.setNextRequest('Get confirmed order (wait for async update)');",
+                  "  setTimeout(() => {}, 1000);",
+                  "} else {",
+                  "  pm.test('Order confirmed within 10 retries', () => pm.expect.fail(`Last status: ${data.status}`));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ship order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/ship",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{orderVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('orderVersion', data.version);",
+                  "pm.test('Order is shipping', () => pm.expect(data.status).to.eql('SHIPPING'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/orders/{{orderId}}/complete",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{orderVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.environment.set('orderVersion', data.version);",
+                  "pm.test('Order is completed', () => pm.expect(data.status).to.eql('COMPLETED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Verification",
+      "item": [
+        {
+          "name": "Get order history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/history"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List customer notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/notifications?page=0&size=20"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get stock movements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/inventory/{{skuId}}/movements?page=0&size=20"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get payment history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/payments/{{paymentId}}/history?page=0&size=20"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
   ]
 }

@@ -7,12 +7,19 @@ import static org.awaitility.Awaitility.await;
 import com.ecommerce.order.messaging.events.PaymentEvent;
 import com.ecommerce.order.models.entities.Order;
 import com.ecommerce.order.models.entities.OrderItem;
+import com.ecommerce.order.models.entities.Reservation;
 import com.ecommerce.order.repositories.OrderRepository;
+import com.ecommerce.order.repositories.ReservationRepository;
 import com.ecommerce.order.services.OrderService;
 import com.ecommerce.order.services.OutboxEventService;
 import com.ecommerce.payment.messaging.events.OrderCancelledEvent;
 import com.ecommerce.payment.messaging.events.OrderCreatedEvent;
 import com.ecommerce.payment.models.dtos.requests.PaymentCallbackRequest;
+import com.ecommerce.payment.models.entities.Payment;
+import com.ecommerce.payment.models.entities.PaymentTransaction;
+import com.ecommerce.payment.repositories.PaymentTransactionRepository;
+import com.ecommerce.payment.services.VnpayCallbackService;
+import com.ecommerce.payment.services.VnpayService;
 import com.ecommerce.payment.services.PaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
@@ -23,11 +30,15 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.HexFormat;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.kafka.clients.admin.Admin;
@@ -125,6 +136,12 @@ class EventFlowIntegrationTest {
         "--app.kafka.retry.interval-ms=100",
         "--app.kafka.retry.max-retries=3",
         "--app.payment.callback-secret=c4-test-secret",
+        "--app.payment.vnpay.enabled=true",
+        "--app.payment.vnpay.tmn-code=C4TMN001",
+        "--app.payment.vnpay.hash-secret=c4-vnpay-secret",
+        "--app.payment.vnpay.return-url=https://test.example/vnpay/return",
+        "--app.payment.vnpay.ipn-url=https://test.example/vnpay/ipn",
+        "--app.payment.vnpay.frontend-result-url=https://test.example/payment/result",
         "--test.redis.address=redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379));
     context.getBean(KafkaListenerEndpointRegistry.class).getListenerContainers()
         .forEach(container -> ContainerTestUtils.waitForAssignment(container, 3));
@@ -272,6 +289,28 @@ class EventFlowIntegrationTest {
     });
     assertThat(count(orders, "SELECT count(*) FROM payment_event_history WHERE order_id=?", order.getId()))
         .isEqualTo(1);
+  }
+
+  @Test
+  void vnpayIpn_shouldUpdatePostgresAndEnqueuePaymentEvent() throws Exception {
+    Order order = seed(Instant.now().plusSeconds(600));
+    Payment payment = payments.getBean(PaymentService.class).processOrderPayment(
+        new OrderCreatedEvent(order.getId(), order.getUserId(), order.getTotalAmount(),
+            order.getCurrency(), order.getPaymentDueAt(), "VNPAY"));
+    var transaction = payments.getBean(PaymentTransactionRepository.class).saveAndFlush(
+        new PaymentTransaction(payment.getId(), "VNPAY", "PAY-" + payment.getId() + "-integration",
+            payment.getAmount(), payment.getCurrency()));
+    Map<String, String> callback = vnpayCallback(payment, transaction);
+
+    assertThat(payments.getBean(VnpayCallbackService.class).process(callback)).isEqualTo("00");
+    assertThat(jdbc(payments).queryForObject(
+        "SELECT status FROM payments WHERE id=?", String.class, payment.getId())).isEqualTo("SUCCESS");
+    payments.getBean(com.ecommerce.payment.messaging.publishers.OutboxPublisher.class).publishPendingEvents();
+    assertThat(count(payments, "SELECT count(*) FROM payment_transactions WHERE txn_ref=? AND status='SUCCESS'",
+        transaction.getTxnRef())).isEqualTo(1);
+    assertThat(count(payments,
+        "SELECT count(*) FROM outbox_events WHERE payload::jsonb -> 'payload' ->> 'paymentId'=?",
+        payment.getId().toString())).isEqualTo(1);
   }
 
   @ParameterizedTest
@@ -449,7 +488,11 @@ class EventFlowIntegrationTest {
       order.addItem(new OrderItem(sku, 2, 50L));
       jdbc(orders).update("INSERT INTO inventory(sku_id,on_hand,reserved,version,created_at,updated_at)"
           + " VALUES (?,10,2,0,now(),now())", sku);
-      return orders.getBean(OrderRepository.class).saveAndFlush(order);
+      Order saved = orders.getBean(OrderRepository.class).saveAndFlush(order);
+      Reservation reservation = new Reservation(saved.getId(), due);
+      reservation.addItem(sku, 2);
+      orders.getBean(ReservationRepository.class).saveAndFlush(reservation);
+      return saved;
     });
   }
 
@@ -477,6 +520,32 @@ class EventFlowIntegrationTest {
     String signature = HexFormat.of().formatHex(
         mac.doFinal((timestamp + rawBody).getBytes(StandardCharsets.UTF_8)));
     payments.getBean(PaymentService.class).callback(callback, rawBody, timestamp, signature);
+  }
+
+  private Map<String, String> vnpayCallback(Payment payment, PaymentTransaction transaction) throws Exception {
+    Map<String, String> params = new TreeMap<>();
+    params.put("vnp_Amount", Long.toString(payment.getAmount() * 100));
+    params.put("vnp_BankCode", "NCB");
+    params.put("vnp_BankTranNo", "BANK-" + payment.getId());
+    params.put("vnp_PayDate", java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
+        .withZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).format(Instant.now()));
+    params.put("vnp_ResponseCode", "00");
+    params.put("vnp_TmnCode", "C4TMN001");
+    params.put("vnp_TransactionNo", "VNPAY-" + payment.getId());
+    params.put("vnp_TransactionStatus", "00");
+    params.put("vnp_TxnRef", transaction.getTxnRef());
+    params.put("vnp_SecureHash", signVnpay(params));
+    return params;
+  }
+
+  private String signVnpay(Map<String, String> params) throws Exception {
+    String data = params.entrySet().stream().map(entry ->
+        URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8) + "="
+            + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8))
+        .reduce((left, right) -> left + "&" + right).orElse("");
+    Mac mac = Mac.getInstance("HmacSHA512");
+    mac.init(new SecretKeySpec("c4-vnpay-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
+    return HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
   }
 
   private void assertStock(Order order, String status, int onHand, int reserved) {

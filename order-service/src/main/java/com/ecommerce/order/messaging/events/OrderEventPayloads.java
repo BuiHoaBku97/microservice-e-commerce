@@ -11,7 +11,8 @@ public final class OrderEventPayloads {
       Long totalAmount,
       String currency,
       Instant paymentDueAt,
-      String orderNumber) {}
+      String orderNumber,
+      String paymentMethod) {}
 
   public record OrderConfirmedPayload(
       Long orderId,

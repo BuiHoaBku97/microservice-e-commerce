@@ -24,7 +24,9 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     listener:
       ack-mode: manual_immediate
+      observation-enabled: true
     producer:
+      observation-enabled: true
       acks: all
       properties:
         enable.idempotence: true
@@ -37,6 +39,13 @@ spring:
 server:
   port: 8084
 
+management:
+  endpoints.web.exposure.include: health,prometheus
+  tracing:
+    sampling.probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
+management.otlp.tracing.endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://otel-collector:4318/v1/traces}
+logging.structured.format.console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:logstash}
+
 app:
   service-jwt:
     private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
@@ -47,6 +56,15 @@ app:
   payment:
     callback-secret: ${PAYMENT_CALLBACK_SECRET:}
     callback-window-seconds: ${PAYMENT_CALLBACK_WINDOW_SECONDS:300}
+    vnpay:
+      enabled: ${VNPAY_ENABLED:false}
+      pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      tmn-code: ${VNPAY_TMN_CODE:}
+      hash-secret: ${VNPAY_HASH_SECRET:}
+      return-url: ${VNPAY_RETURN_URL:}
+      ipn-url: ${VNPAY_IPN_URL:}
+      frontend-result-url: ${VNPAY_FRONTEND_RESULT_URL:}
+      expire-minutes: ${VNPAY_EXPIRE_MINUTES:15}
   kafka:
     topics:
       order-events: ${ORDER_EVENTS_TOPIC:ecommerce.order.events}

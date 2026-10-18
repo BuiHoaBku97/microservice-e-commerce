@@ -8,6 +8,7 @@ import com.ecommerce.payment.services.ProcessedEventService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.util.Set;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -88,6 +89,9 @@ public class OrderEventConsumer {
         requiredLong(payload, "totalAmount");
         requiredText(payload, "currency");
         requiredText(payload, "orderNumber");
+        String paymentMethod = payload.path("paymentMethod").asText("MOCK_ONLINE");
+        if (!Set.of("MOCK_ONLINE", "VNPAY").contains(paymentMethod))
+          throw new IllegalArgumentException("ORDER_EVENT_FIELD_INVALID:paymentMethod");
         requiredInstant(payload, "paymentDueAt");
       }
       case "OrderConfirmed" -> {

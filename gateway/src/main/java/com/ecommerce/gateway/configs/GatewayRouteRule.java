@@ -18,6 +18,8 @@ public final class GatewayRouteRule {
           new Route(HttpMethod.POST, "/api/v1/auth/refresh"),
           new Route(HttpMethod.POST, "/api/v1/auth/logout"),
           new Route(HttpMethod.POST, "/api/v1/payments/mock/callback"),
+          new Route(HttpMethod.GET, "/api/v1/payments/vnpay/ipn"),
+          new Route(HttpMethod.GET, "/api/v1/payments/vnpay/return"),
           new Route(HttpMethod.GET, "/api/v1/categories/**"),
           new Route(HttpMethod.GET, "/api/v1/inventory/availability"),
           new Route(HttpMethod.GET, "/api/v1/products/**"));

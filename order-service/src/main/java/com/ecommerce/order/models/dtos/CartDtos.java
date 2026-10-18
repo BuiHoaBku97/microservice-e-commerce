@@ -94,7 +94,7 @@ public final class CartDtos {
   public record CheckoutRequest(
       @NotNull Long cartVersion,
       @NotNull Long addressId,
-      @NotBlank @Pattern(regexp = "MOCK_ONLINE") String paymentMethod,
+      @NotBlank @Pattern(regexp = "MOCK_ONLINE|VNPAY") String paymentMethod,
       @Size(max = 1000) String customerNote,
       @NotNull @jakarta.validation.constraints.NotEmpty List<@Valid CheckoutItem> expectedItems) {
     public CheckoutRequest(

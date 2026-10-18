@@ -1,0 +1,41 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "sum by (application) (rate(http_server_requests_seconds_count[1m]))", "legendFormat": "{{application}}", "refId": "A"}],
+      "title": "Request rate by service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "sum by (name) (container_memory_working_set_bytes{image!=\"\"})", "legendFormat": "{{name}}", "refId": "A"}],
+      "title": "Container memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "loki"},
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [{"expr": "{service=\"order-service\"} | json | level=\"ERROR\"", "queryType": "range", "refId": "A"}],
+      "title": "Order service errors",
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["ecommerce", "observability"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "E-commerce Observability",
+  "uid": "ecommerce-observability",
+  "version": 1
+}

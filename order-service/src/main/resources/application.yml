@@ -23,13 +23,22 @@ spring:
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-    listener: {ack-mode: manual_immediate}
+    listener:
+      ack-mode: manual_immediate
+      observation-enabled: true
     producer:
+      observation-enabled: true
       acks: all
       properties: {enable.idempotence: true}
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 server: {port: 8083}
+management:
+  endpoints.web.exposure.include: health,prometheus
+  tracing:
+    sampling.probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
+management.otlp.tracing.endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://otel-collector:4318/v1/traces}
+logging.structured.format.console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:logstash}
 app:
   service-jwt:
     private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
