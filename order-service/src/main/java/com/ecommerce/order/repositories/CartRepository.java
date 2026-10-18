@@ -9,7 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CartRepository extends JpaRepository<Cart, Long> {
-  Optional<Cart> findByUserId(Long userId);
+  @Query("select distinct c from Cart c left join fetch c.items where c.userId = :userId")
+  Optional<Cart> findByUserId(@Param("userId") Long userId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select distinct c from Cart c left join fetch c.items where c.userId = :userId")
