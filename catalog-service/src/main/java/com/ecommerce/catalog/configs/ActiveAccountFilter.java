@@ -49,6 +49,7 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
       return;
     }
+    HttpResponse<String> accountStatusResponse;
     try {
       HttpRequest accountStatusRequest =
           HttpRequest.newBuilder()
@@ -61,19 +62,20 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
               .header(CorrelationContext.HEADER, CorrelationContext.currentOrCreate())
               .GET()
               .build();
-      HttpResponse<String> accountStatusResponse =
-          httpClient.send(accountStatusRequest, HttpResponse.BodyHandlers.ofString());
-      if (accountStatusResponse.statusCode() == 200
-          && "ACTIVE".equals(accountStatusResponse.body())) {
-        chain.doFilter(request, response);
-        return;
-      }
-      JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE", request.getRequestId());
+      accountStatusResponse = httpClient.send(accountStatusRequest, HttpResponse.BodyHandlers.ofString());
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       JsonErrorWriter.write(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE", request.getRequestId());
+      return;
     } catch (Exception exception) {
       JsonErrorWriter.write(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE", request.getRequestId());
+      return;
     }
+    if (accountStatusResponse.statusCode() != 200
+        || !"ACTIVE".equals(accountStatusResponse.body())) {
+      JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE", request.getRequestId());
+      return;
+    }
+    chain.doFilter(request, response);
   }
 }

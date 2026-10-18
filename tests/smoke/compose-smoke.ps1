@@ -14,7 +14,14 @@ function Invoke-Json([string]$Method, [string]$Path, $Body = $null,
     $arguments.ContentType = "application/json"
     $arguments.Body = $Body | ConvertTo-Json -Depth 10 -Compress
   }
-  Invoke-RestMethod @arguments
+  try {
+    Invoke-RestMethod @arguments
+  } catch {
+    $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { "no status" }
+    $details = $_.ErrorDetails.Message
+    if (!$details) { $details = $_.Exception.Message }
+    throw "$Method $Path failed ($status): $details"
+  }
 }
 
 function Wait-Until([scriptblock]$Probe, [string]$Description, [int]$Seconds = 45) {
@@ -48,6 +55,12 @@ if (!$AdminToken) {
   if (!$AdminEmail -or !$AdminPassword) { throw "Set ADMIN_TOKEN or ADMIN_EMAIL and ADMIN_PASSWORD" }
   $AdminToken = (Invoke-Json POST "/api/v1/auth/login" @{email=$AdminEmail;password=$AdminPassword}).data.accessToken
 }
+Wait-Until {
+  Invoke-Json GET "/api/v1/categories?page=0&size=1"
+} "Catalog route discovery" | Out-Null
+Wait-Until {
+  Invoke-Json GET "/api/v1/admin/inventory?page=0&size=1" $null $AdminToken
+} "Order route discovery" | Out-Null
 
 $suffix = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 $email = "smoke-$suffix@example.test"
@@ -66,11 +79,12 @@ $category = (Invoke-Json POST "/api/v1/admin/categories" @{
   code="SMOKE-$suffix";name="Smoke $suffix";slug="smoke-$suffix"
 } $AdminToken).data
 $product = (Invoke-Json POST "/api/v1/admin/products" @{
-  categoryId=$category.id;name="Áo smoke $suffix";description="Compose acceptance";imageUrls=@()
+  categoryId=$category.id;name="Ao smoke $suffix";description="Compose acceptance";imageUrls=@()
 } $AdminToken).data
 $sku = (Invoke-Json POST "/api/v1/admin/products/$($product.id)/skus" @{
   code="SMOKE-SKU-$suffix";color="black";size="M";price=125000
 } $AdminToken).data
+$product = (Invoke-Json GET "/api/v1/admin/products/$($product.id)" $null $AdminToken).data
 Invoke-Json PUT "/api/v1/admin/products/$($product.id)/status" @{
   status="ACTIVE";version=$product.version
 } $AdminToken | Out-Null

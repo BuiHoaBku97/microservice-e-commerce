@@ -10,6 +10,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +24,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
     havingValue = "true",
     matchIfMissing = true)
 public class ActiveAccountFilter extends OncePerRequestFilter {
+  private static final Logger log = LoggerFactory.getLogger(ActiveAccountFilter.class);
   private final ServiceJwtProvider serviceJwtProvider;
   private final HttpClient httpClient;
   private final String identityUrl;
@@ -49,6 +52,7 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
       chain.doFilter(request, response);
       return;
     }
+    HttpResponse<String> accountStatusResponse;
     try {
       HttpRequest accountStatusRequest =
           HttpRequest.newBuilder()
@@ -61,19 +65,22 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
               .header(CorrelationContext.HEADER, CorrelationContext.currentOrCreate())
               .GET()
               .build();
-      HttpResponse<String> accountStatusResponse =
-          httpClient.send(accountStatusRequest, HttpResponse.BodyHandlers.ofString());
-      if (accountStatusResponse.statusCode() == 200
-          && "ACTIVE".equals(accountStatusResponse.body())) {
-        chain.doFilter(request, response);
-        return;
-      }
-      JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE", request.getRequestId());
+      accountStatusResponse = httpClient.send(accountStatusRequest, HttpResponse.BodyHandlers.ofString());
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
+      log.warn("Identity status check interrupted for path {}", request.getServletPath(), exception);
       JsonErrorWriter.write(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE", request.getRequestId());
+      return;
     } catch (Exception exception) {
+      log.warn("Identity status check failed for path {}", request.getServletPath(), exception);
       JsonErrorWriter.write(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "IDENTITY_UNAVAILABLE", request.getRequestId());
+      return;
     }
+    if (accountStatusResponse.statusCode() != 200
+        || !"ACTIVE".equals(accountStatusResponse.body())) {
+      JsonErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "ACCOUNT_NOT_ACTIVE", request.getRequestId());
+      return;
+    }
+    chain.doFilter(request, response);
   }
 }

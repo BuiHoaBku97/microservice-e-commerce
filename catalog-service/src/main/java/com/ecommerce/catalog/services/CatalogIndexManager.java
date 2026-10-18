@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.data.elasticsearch.NoSuchIndexException;
+import org.springframework.data.elasticsearch.ResourceNotFoundException;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.IndexOperations;
 import org.springframework.data.elasticsearch.core.index.AliasAction;
@@ -91,7 +93,15 @@ public class CatalogIndexManager {
   }
 
   private Map<String, ?> indicesForAlias(String alias) {
-    return elasticsearchOperations.indexOps(CatalogProductDocument.class).getAliases(alias);
+    try {
+      return elasticsearchOperations.indexOps(CatalogProductDocument.class).getAliases(alias);
+    } catch (RuntimeException exception) {
+      if (exception instanceof NoSuchIndexException
+          || exception instanceof ResourceNotFoundException) {
+        return Map.of();
+      }
+      throw exception;
+    }
   }
 
   private AliasActionParameters parameters(String indexName, String alias) {

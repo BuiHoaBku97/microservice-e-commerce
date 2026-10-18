@@ -660,6 +660,7 @@ public class OrderService {
     Order savedOrder = orderRepository.save(order);
     recordStatus(savedOrder, "ADMIN_SHIP", null);
     outboxEventService.enqueueOrderShipping(savedOrder);
+    savedOrder.getItems().size();
     return savedOrder;
   }
 
@@ -674,6 +675,7 @@ public class OrderService {
     Order savedOrder = orderRepository.save(order);
     recordStatus(savedOrder, "ADMIN_COMPLETE", null);
     outboxEventService.enqueueOrderCompleted(savedOrder);
+    savedOrder.getItems().size();
     return savedOrder;
   }
 
@@ -722,7 +724,9 @@ public class OrderService {
 
   @Transactional
   public Order getForAdmin(Long orderId) {
-    return orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+    return orderRepository
+        .findWithItemsById(orderId)
+        .orElseThrow(() -> new OrderNotFoundException(orderId));
   }
 
   @Transactional

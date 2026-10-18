@@ -61,13 +61,17 @@ public class CatalogSearchService {
           Criteria.where("name")
               .matches(query)
               .or("description")
-              .matches(query)
-              .or("normalizedName")
-              .contains(normalizedQuery)
-              .or("colors")
-              .contains(normalizedQuery)
-              .or("sizes")
-              .contains(normalizedQuery);
+              .matches(query);
+      for (String term : normalizedQuery.split("\\s+")) {
+        textCriteria =
+            textCriteria
+                .or("normalizedName")
+                .contains(term)
+                .or("colors")
+                .contains(term)
+                .or("sizes")
+                .contains(term);
+      }
       criteria = criteria.subCriteria(textCriteria);
     }
     PageRequest pageable = PageRequest.of(safePage, safeSize, sortOrder);

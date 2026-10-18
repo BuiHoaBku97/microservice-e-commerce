@@ -22,7 +22,7 @@ Spring Boot 3.5.15 yêu cầu Java tối thiểu 17, hỗ trợ đến Java 25 v
 |---|---|---|
 | PostgreSQL | `postgres:16.4` | Một container, năm database và user riêng |
 | Kafka | `apache/kafka:3.9.1` | KRaft đơn node, replication factor 1 cho demo |
-| Elasticsearch | `elasticsearch:8.15.3` | Single-node, heap giới hạn rõ ràng |
+| Elasticsearch | `elasticsearch:8.18.8` | Single-node, heap giới hạn rõ ràng |
 | Redis | `redis:7.4.1` | Lock/cache/rate limit; không là nguồn dữ liệu nghiệp vụ |
 
 Các image phải được smoke test trước khi coi baseline là hoàn tất. Không dùng tag `latest`.
