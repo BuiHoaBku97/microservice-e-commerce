@@ -26,9 +26,23 @@ function Wait-Until([scriptblock]$Probe, [string]$Description, [int]$Seconds = 4
   throw "Timed out waiting for $Description"
 }
 
+$expectedServices = @(
+  "postgres", "kafka", "redis", "elasticsearch", "eureka-server", "identity-service",
+  "catalog-service", "order-service", "payment-service", "notification-service", "gateway"
+)
+$runningServices = @(docker compose ps --services --status running)
+$missingServices = @($expectedServices | Where-Object { $_ -notin $runningServices })
+if ($missingServices.Count -gt 0) {
+  throw "Compose services are not running: $($missingServices -join ', ')"
+}
 $rows = docker compose ps --format json | ConvertFrom-Json
-if (!$rows -or ($rows | Where-Object { $_.State -ne "running" })) {
-  throw "Every Compose service must be running before the smoke test"
+$unhealthy = @($rows | Where-Object { $_.Health -and $_.Health -ne "healthy" })
+if ($unhealthy.Count -gt 0) {
+  throw "Compose services are not healthy: $(($unhealthy.Service -join ', '))"
+}
+$kafkaInit = docker compose ps -a kafka-init --format json | ConvertFrom-Json
+if (!$kafkaInit -or $kafkaInit.State -ne "exited" -or $kafkaInit.ExitCode -ne 0) {
+  throw "kafka-init did not complete successfully"
 }
 if (!$AdminToken) {
   if (!$AdminEmail -or !$AdminPassword) { throw "Set ADMIN_TOKEN or ADMIN_EMAIL and ADMIN_PASSWORD" }
@@ -88,13 +102,21 @@ $payment = Wait-Until {
   if ($candidate.id) { $candidate }
 } "payment creation"
 Invoke-Json POST "/api/v1/admin/demo/payments/$($payment.id)/simulate" @{result="SUCCESS"} $AdminToken | Out-Null
-Wait-Until {
+$confirmedOrder = Wait-Until {
   $candidate=(Invoke-Json GET "/api/v1/orders/$($order.id)" $null $customerToken).data
   if ($candidate.status -eq "CONFIRMED") { $candidate }
-} "order confirmation" | Out-Null
+} "order confirmation"
+$shippingOrder = (Invoke-Json POST "/api/v1/admin/orders/$($order.id)/ship" @{
+  version=$confirmedOrder.version
+} $AdminToken).data
+$completedOrder = (Invoke-Json POST "/api/v1/admin/orders/$($order.id)/complete" @{
+  version=$shippingOrder.version
+} $AdminToken).data
+if ($completedOrder.status -ne "COMPLETED") { throw "Order did not complete" }
 Wait-Until {
-  $page=Invoke-Json GET "/api/v1/admin/notifications?userId=$customerId&page=0&size=20" $null $AdminToken
-  if ($page.data.totalElements -ge 1) { $page }
+  $page=Invoke-Json GET "/api/v1/admin/notifications?page=0&size=100" $null $AdminToken
+  $owned=@($page.data.items | Where-Object { $_.userId -eq $customerId })
+  if ($owned.Count -ge 1) { $page }
 } "notification creation" | Out-Null
 
 $inventory = Invoke-Json GET "/api/v1/admin/inventory?skuId=$($sku.id)" $null $AdminToken
