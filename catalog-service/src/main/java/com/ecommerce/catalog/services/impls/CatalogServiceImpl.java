@@ -241,8 +241,8 @@ public class CatalogServiceImpl implements CatalogService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<CategoryResponse> listAllCategories() {
-    return categoryRepository.findAll().stream().map(this::toResponse).toList();
+  public Page<CategoryResponse> listAllCategories(Pageable pageable) {
+    return categoryRepository.findAll(pageable).map(this::toResponse);
   }
 
   @Override
@@ -260,12 +260,11 @@ public class CatalogServiceImpl implements CatalogService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<ProductResponse> listAllProducts() {
-    return productRepository.findAll().stream()
+  public Page<ProductResponse> listAllProducts(Status status, Long categoryId, Pageable pageable) {
+    return productRepository.findForAdmin(status, categoryId, pageable)
         .map(
             product ->
-                toResponse(product, skuRepository.findByProductIdOrderByIdAsc(product.getId())))
-        .toList();
+                toResponse(product, skuRepository.findByProductIdOrderByIdAsc(product.getId())));
   }
 
   @Override

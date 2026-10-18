@@ -109,8 +109,13 @@ public class CatalogController {
   }
 
   @GetMapping("/admin/categories")
-  public ApiResponse<List<CategoryResponse>> adminCategories(HttpServletRequest request) {
-    return ApiResponse.success(catalogService.listAllCategories(), request.getRequestId());
+  public ApiResponse<PageResponse<CategoryResponse>> adminCategories(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      HttpServletRequest request) {
+    return ApiResponse.success(PageResponse.from(catalogService.listAllCategories(
+        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100),
+            org.springframework.data.domain.Sort.by("id").descending()))), request.getRequestId());
   }
 
   @PatchMapping("/admin/categories/{id}")
@@ -123,8 +128,15 @@ public class CatalogController {
   }
 
   @GetMapping("/admin/products")
-  public ApiResponse<List<ProductResponse>> adminProducts(HttpServletRequest request) {
-    return ApiResponse.success(catalogService.listAllProducts(), request.getRequestId());
+  public ApiResponse<PageResponse<ProductResponse>> adminProducts(
+      @RequestParam(required = false) com.ecommerce.catalog.models.entities.Status status,
+      @RequestParam(required = false) Long categoryId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      HttpServletRequest request) {
+    return ApiResponse.success(PageResponse.from(catalogService.listAllProducts(
+        status, categoryId,
+        PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100)))), request.getRequestId());
   }
 
   @GetMapping("/admin/products/{id}")

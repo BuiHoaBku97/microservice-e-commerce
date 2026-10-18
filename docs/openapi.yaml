@@ -860,7 +860,7 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
       security: *id002
-      parameters: &id007
+      parameters: &id006
       - *id004
       - *id005
   /api/v1/products/search:
@@ -981,6 +981,7 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
       security: *id003
+      parameters: *id006
     post:
       operationId: createCategory
       summary: Create category
@@ -1051,7 +1052,7 @@ paths:
   /api/v1/admin/products:
     get:
       operationId: listAdminProducts
-      summary: List all products
+      summary: Filter all products
       tags:
       - Catalog
       responses:
@@ -1072,6 +1073,20 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
       security: *id003
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: categoryId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - *id004
+      - *id005
     post:
       operationId: createProduct
       summary: Create draft product
@@ -1603,7 +1618,7 @@ paths:
           $ref: '#/components/responses/Conflict'
       security: *id003
       parameters:
-      - &id006
+      - &id007
         $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
@@ -2077,7 +2092,7 @@ paths:
           type: integer
           format: int64
           minimum: 1
-      - *id006
+      - *id007
   /api/v1/admin/inventory/{skuId}/receipts:
     post:
       operationId: receiveInventory
@@ -2110,7 +2125,7 @@ paths:
           type: integer
           format: int64
           minimum: 1
-      - *id006
+      - *id007
       requestBody:
         required: true
         content:
@@ -2149,7 +2164,7 @@ paths:
           type: integer
           format: int64
           minimum: 1
-      - *id006
+      - *id007
       requestBody:
         required: true
         content:
@@ -2595,7 +2610,7 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
       security: *id003
-      parameters: *id007
+      parameters: *id006
   /api/v1/notifications/{notificationId}/read:
     patch:
       operationId: markNotificationRead

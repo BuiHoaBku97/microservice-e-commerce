@@ -107,12 +107,14 @@ add("/api/v1/products/search", "get", "searchProducts", "Search sellable product
             query("sort", enum=["relevance", "priceAsc", "priceDesc", "newest"]), *PAGE])
 add("/api/v1/products/{id}", "get", "getProduct", "Get active product", "Catalog", security=PUBLIC,
     params=[path_param("id")])
-add("/api/v1/admin/categories", "get", "listAdminCategories", "List all categories", "Catalog", security=USER)
+add("/api/v1/admin/categories", "get", "listAdminCategories", "List all categories", "Catalog", security=USER,
+    params=PAGE)
 add("/api/v1/admin/categories", "post", "createCategory", "Create category", "Catalog", security=USER,
     body="GenericObject", success="201", success_description="Category created")
 add("/api/v1/admin/categories/{id}", "patch", "updateCategory", "Update category", "Catalog", security=USER,
     params=[path_param("id")], body="GenericObject")
-add("/api/v1/admin/products", "get", "listAdminProducts", "List all products", "Catalog", security=USER)
+add("/api/v1/admin/products", "get", "listAdminProducts", "Filter all products", "Catalog", security=USER,
+    params=[query("status"), query("categoryId", "integer", format="int64"), *PAGE])
 add("/api/v1/admin/products", "post", "createProduct", "Create draft product", "Catalog", security=USER,
     body="GenericObject", success="201", success_description="Product created")
 add("/api/v1/admin/products/{id}", "get", "getAdminProduct", "Get product for administration", "Catalog",

@@ -12,6 +12,7 @@ import com.ecommerce.catalog.models.dtos.responses.CheckoutItemResponse;
 import com.ecommerce.catalog.models.dtos.responses.ProductResponse;
 import com.ecommerce.catalog.models.dtos.responses.SkuResponse;
 import com.ecommerce.catalog.models.dtos.responses.SkuPriceHistoryResponse;
+import com.ecommerce.catalog.models.entities.Status;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,9 +34,9 @@ public interface CatalogService {
 
   CheckoutItemResponse getSkuForInventory(Long skuId);
 
-  List<CategoryResponse> listAllCategories();
+  Page<CategoryResponse> listAllCategories(Pageable pageable);
   CategoryResponse updateCategory(Long id, UpdateCategoryRequest request);
-  List<ProductResponse> listAllProducts();
+  Page<ProductResponse> listAllProducts(Status status, Long categoryId, Pageable pageable);
   ProductResponse getAdminProduct(Long id);
   ProductResponse updateProduct(Long id, UpdateProductRequest request);
   ProductResponse changeProductStatus(Long id, ChangeStatusRequest request);
