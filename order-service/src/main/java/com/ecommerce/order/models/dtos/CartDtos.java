@@ -17,7 +17,7 @@ public final class CartDtos {
   public record CartItemRequest(
       @NotNull Long skuId,
       @NotNull @Min(1) @Max(10) Integer quantity,
-      @NotNull @Min(1) Long displayedUnitPrice) {}
+      @Min(1) Long displayedUnitPrice) {}
 
   public record CartResponse(Long id, Long userId, Long version, List<Item> items) {
     public record Item(Long skuId, Integer quantity, Long displayedUnitPrice) {}

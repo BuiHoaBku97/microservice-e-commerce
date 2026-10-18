@@ -3,7 +3,10 @@
 Internal calls use `X-Service-Authorization: Bearer <JWT>`. Tokens are RS256 signed, last 60 seconds,
 and contain `iss`, service `sub`, `aud`, `scope`, `iat`, `exp`, `jti`, and `kid`. Order issues
 `identity.checkout` for audience `identity-service` and `catalog.checkout` for audience
-`catalog-service`. The end-user bearer token remains in `Authorization` and is verified separately.
+`catalog-service`. Identity checkout and `current/status` receive the end-user bearer token in
+`Authorization` and verify it separately. Catalog checkout receives only the service JWT because
+Order has already verified the customer and address; Catalog trusts the restricted service scope
+and reads authoritative SKU data without calling Identity again.
 
 Each caller has its own RSA key pair. Compose receives the private keys through
 `ORDER_SERVICE_JWT_PRIVATE_KEY_BASE64`, `CATALOG_SERVICE_JWT_PRIVATE_KEY_BASE64`,

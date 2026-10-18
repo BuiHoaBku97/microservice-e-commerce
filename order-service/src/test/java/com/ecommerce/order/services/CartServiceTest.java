@@ -50,10 +50,12 @@ class CartServiceTest {
 
     Cart result =
         new CartService(carts, catalog)
-            .add(7L, new CartDtos.CartItemRequest(10L, 1, 150_000L), 0L);
+            .add(7L, new CartDtos.CartItemRequest(10L, 1, 1L), 0L);
 
     org.assertj.core.api.Assertions.assertThat(result.getItems()).hasSize(1);
     org.assertj.core.api.Assertions.assertThat(result.getItems().getFirst().getSkuId()).isEqualTo(10L);
+    org.assertj.core.api.Assertions.assertThat(result.getItems().getFirst().getDisplayedUnitPrice())
+        .isEqualTo(150_000L);
     verify(catalog).getSku(10L);
     verify(carts).save(cart);
   }

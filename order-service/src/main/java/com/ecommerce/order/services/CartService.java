@@ -43,7 +43,7 @@ public class CartService {
 
   @Transactional
   public Cart add(Long userId, CartDtos.CartItemRequest request, Long expectedVersion) {
-    requireSellableSku(request.skuId());
+    CatalogCheckoutItem catalogSku = requireSellableSku(request.skuId());
     Cart cart = checkedCart(userId, expectedVersion);
     CartItem item =
         cart.getItems().stream()
@@ -55,7 +55,7 @@ public class CartService {
       item.setCart(cart);
       item.setSkuId(request.skuId());
       item.setQuantity(request.quantity());
-      item.setDisplayedUnitPrice(request.displayedUnitPrice());
+      item.setDisplayedUnitPrice(catalogSku.unitPrice());
       item.touch();
       cart.getItems().add(item);
     } else {
@@ -63,7 +63,7 @@ public class CartService {
       if (quantity > 10)
         throw new IllegalArgumentException("Số lượng mỗi SKU trong giỏ không được vượt quá 10");
       item.setQuantity(quantity);
-      item.setDisplayedUnitPrice(request.displayedUnitPrice());
+      item.setDisplayedUnitPrice(catalogSku.unitPrice());
       item.touch();
     }
     cart.touch();
@@ -76,7 +76,7 @@ public class CartService {
     if (!Objects.equals(skuId, request.skuId())) {
       throw new IllegalArgumentException("SKU_ID_MISMATCH");
     }
-    requireSellableSku(skuId);
+    CatalogCheckoutItem catalogSku = requireSellableSku(skuId);
     Cart cart = checkedCart(userId, expectedVersion);
     CartItem item =
         cart.getItems().stream()
@@ -84,7 +84,7 @@ public class CartService {
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("SKU không tồn tại trong giỏ hàng"));
     item.setQuantity(request.quantity());
-    item.setDisplayedUnitPrice(request.displayedUnitPrice());
+    item.setDisplayedUnitPrice(catalogSku.unitPrice());
     item.touch();
     cart.touch();
     return cartRepository.save(cart);
@@ -112,7 +112,7 @@ public class CartService {
     return cart;
   }
 
-  private void requireSellableSku(Long skuId) {
+  private CatalogCheckoutItem requireSellableSku(Long skuId) {
     CatalogCheckoutItem sku;
     try {
       sku = catalogReadClient.getSku(skuId);
@@ -124,5 +124,6 @@ public class CartService {
     if (sku == null || !sku.sellable()) {
       throw new IllegalStateException("SKU_NOT_SELLABLE");
     }
+    return sku;
   }
 }
