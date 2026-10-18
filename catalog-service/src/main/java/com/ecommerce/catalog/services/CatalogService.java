@@ -19,7 +19,7 @@ import org.springframework.data.domain.Pageable;
 public interface CatalogService {
   CategoryResponse createCategory(CreateCategoryRequest request);
 
-  List<CategoryResponse> listActiveCategories();
+  Page<CategoryResponse> listActiveCategories(Pageable pageable);
 
   ProductResponse createProduct(CreateProductRequest request);
 

@@ -44,14 +44,14 @@ public class ActiveAccountFilter extends OncePerRequestFilter {
       return;
     }
     try {
-      long userId = Long.parseLong(authentication.getName());
       HttpRequest accountStatusRequest =
           HttpRequest.newBuilder()
-              .uri(URI.create(identityUrl + "/internal/v1/users/" + userId + "/status"))
+              .uri(URI.create(identityUrl + "/internal/v1/users/current/status"))
               .timeout(Duration.ofSeconds(3))
               .header(
                   "X-Service-Authorization",
                   "Bearer " + serviceJwtProvider.issue("identity-service", "identity.status"))
+              .header("Authorization", request.getHeader("Authorization"))
               .header(CorrelationContext.HEADER, CorrelationContext.currentOrCreate())
               .GET()
               .build();

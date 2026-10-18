@@ -88,10 +88,8 @@ public class CatalogServiceImpl implements CatalogService {
 
   @Override
   @Transactional(readOnly = true)
-  public List<CategoryResponse> listActiveCategories() {
-    return categoryRepository.findByStatusOrderByNameAsc(Status.ACTIVE).stream()
-        .map(this::toResponse)
-        .toList();
+  public Page<CategoryResponse> listActiveCategories(Pageable pageable) {
+    return categoryRepository.findByStatus(Status.ACTIVE, pageable).map(this::toResponse);
   }
 
   @Override

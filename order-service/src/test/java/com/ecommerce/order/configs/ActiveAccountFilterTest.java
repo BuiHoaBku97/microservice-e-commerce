@@ -32,7 +32,7 @@ class ActiveAccountFilterTest {
   void blocksAUserWhoseCurrentStatusIsLocked() throws Exception {
     server = HttpServer.create(new InetSocketAddress(0), 0);
     server.createContext(
-        "/internal/v1/users/7/status",
+        "/internal/v1/users/current/status",
         exchange -> {
           byte[] body = "LOCKED".getBytes();
           exchange.sendResponseHeaders(200, body.length);
@@ -85,6 +85,7 @@ class ActiveAccountFilterTest {
                 "7", null, List.of(new SimpleGrantedAuthority("SCOPE_CUSTOMER"))));
     var request = new MockHttpServletRequest(method, servletPath);
     request.setServletPath(servletPath);
+    request.addHeader("Authorization", "Bearer customer-token");
     var response = new MockHttpServletResponse();
     filter.doFilter(request, response, new MockFilterChain());
     return response;

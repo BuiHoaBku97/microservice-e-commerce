@@ -56,6 +56,7 @@ class ActiveAccountFilterTest {
                 "7", null, List.of(new SimpleGrantedAuthority("SCOPE_CUSTOMER"))));
     var request = new MockHttpServletRequest(method, path);
     request.setServletPath(path);
+    request.addHeader("Authorization", "Bearer customer-token");
     var response = new MockHttpServletResponse();
     filter.doFilter(request, response, new MockFilterChain());
     return response;

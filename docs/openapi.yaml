@@ -860,6 +860,9 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
       security: *id002
+      parameters: &id007
+      - *id004
+      - *id005
   /api/v1/products/search:
     get:
       operationId: searchProducts
@@ -2592,9 +2595,7 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
       security: *id003
-      parameters:
-      - *id004
-      - *id005
+      parameters: *id007
   /api/v1/notifications/{notificationId}/read:
     patch:
       operationId: markNotificationRead
@@ -2720,7 +2721,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-      security:
+      security: &id008
       - serviceJwt: []
         userJwt: []
       requestBody:
@@ -2729,6 +2730,30 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CheckoutContextRequest'
+  /internal/v1/users/current/status:
+    get:
+      operationId: getCurrentUserStatus
+      summary: Get current end-user status
+      tags:
+      - Internal
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security: *id008
   /internal/v1/users/{userId}/status:
     get:
       operationId: getUserStatus
@@ -2752,7 +2777,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-      security: &id007
+      security: &id009
       - serviceJwt: []
       parameters:
       - name: userId
@@ -2785,7 +2810,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-      security: *id007
+      security: *id009
       requestBody:
         required: true
         content:
@@ -2815,7 +2840,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-      security: *id007
+      security: *id009
       parameters:
       - name: skuId
         in: path

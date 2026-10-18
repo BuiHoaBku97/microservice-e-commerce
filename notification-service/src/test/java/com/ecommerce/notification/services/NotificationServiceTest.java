@@ -79,6 +79,6 @@ class NotificationServiceTest {
 
     assertThatThrownBy(() -> notificationService.markRead(99L, 1L))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Không tìm thấy thông báo");
+        .hasMessage("NOTIFICATION_NOT_FOUND");
   }
 }

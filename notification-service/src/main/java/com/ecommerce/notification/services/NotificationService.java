@@ -53,7 +53,7 @@ public class NotificationService {
     Notification notification =
         notificationRepository
             .findByIdAndUserId(notificationId, userId)
-            .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy thông báo"));
+            .orElseThrow(() -> new IllegalArgumentException("NOTIFICATION_NOT_FOUND"));
     notification.markRead();
     return notificationRepository.save(notification);
   }

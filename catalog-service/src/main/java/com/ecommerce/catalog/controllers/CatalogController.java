@@ -45,8 +45,15 @@ public class CatalogController {
   }
 
   @GetMapping("/categories")
-  public ApiResponse<List<CategoryResponse>> categories(HttpServletRequest request) {
-    return ApiResponse.success(catalogService.listActiveCategories(), request.getRequestId());
+  public ApiResponse<PageResponse<CategoryResponse>> categories(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      HttpServletRequest request) {
+    int safeSize = Math.min(Math.max(size, 1), 100);
+    return ApiResponse.success(PageResponse.from(catalogService.listActiveCategories(
+        PageRequest.of(Math.max(page, 0), safeSize,
+            org.springframework.data.domain.Sort.by("name").ascending().and(
+                org.springframework.data.domain.Sort.by("id").ascending())))), request.getRequestId());
   }
 
   @GetMapping("/products/search")

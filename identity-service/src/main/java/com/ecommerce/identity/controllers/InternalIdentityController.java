@@ -35,4 +35,9 @@ public class InternalIdentityController {
   public String status(@PathVariable Long userId) {
     return userService.currentStatus(userId).name();
   }
+
+  @GetMapping(value = "/current/status", produces = "text/plain")
+  public String currentStatus(Authentication authentication) {
+    return userService.currentStatus(Long.valueOf(authentication.getName())).name();
+  }
 }

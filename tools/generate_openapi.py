@@ -98,7 +98,8 @@ add("/api/v1/admin/users/{id}/unlock", "post", "unlockUser", "Unlock user", "Ide
     params=[path_param("id")], body="ChangeUserStatusRequest")
 
 # Catalog
-add("/api/v1/categories", "get", "listCategories", "List active categories", "Catalog", security=PUBLIC)
+add("/api/v1/categories", "get", "listCategories", "List active categories", "Catalog", security=PUBLIC,
+    params=PAGE)
 add("/api/v1/products/search", "get", "searchProducts", "Search sellable products", "Catalog", security=PUBLIC,
     params=[query("q"), query("categoryId", "integer", format="int64"),
             query("minPrice", "integer", format="int64", minimum=0),
@@ -221,6 +222,8 @@ add("/api/v1/admin/notifications/{id}/attempts", "get", "listNotificationAttempt
 # Internal service APIs. Catalog calls require only serviceJwt by design.
 add("/internal/v1/users/current/checkout-context", "post", "getCheckoutContext", "Resolve active customer and address", "Internal",
     security=SERVICE_AND_USER, body="CheckoutContextRequest")
+add("/internal/v1/users/current/status", "get", "getCurrentUserStatus", "Get current end-user status", "Internal",
+    security=SERVICE_AND_USER)
 add("/internal/v1/users/{userId}/status", "get", "getUserStatus", "Get minimal user status", "Internal",
     security=SERVICE, params=[path_param("userId")])
 add("/internal/v1/skus/checkout-items", "post", "getCheckoutItems", "Resolve authoritative checkout SKU snapshots", "Internal",
