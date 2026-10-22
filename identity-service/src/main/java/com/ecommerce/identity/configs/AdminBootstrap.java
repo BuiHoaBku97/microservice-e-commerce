@@ -39,8 +39,7 @@ public class AdminBootstrap implements ApplicationRunner {
   @Transactional
   public void run(ApplicationArguments arguments) {
     if (email.isBlank() || password.length() < 8) {
-      throw new IllegalStateException(
-          "ADMIN_EMAIL and ADMIN_PASSWORD with at least 8 characters are required");
+      throw new IllegalStateException("ADMIN_ACCOUNT_BAD_FORMAT");
     }
     String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
     User administrator =

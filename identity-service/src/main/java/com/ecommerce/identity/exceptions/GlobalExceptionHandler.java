@@ -1,6 +1,7 @@
 package com.ecommerce.identity.exceptions;
 
 import com.ecommerce.identity.models.dtos.responses.ApiErrorResponse;
+import jakarta.persistence.Tuple;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -28,21 +29,18 @@ public class GlobalExceptionHandler {
   ResponseEntity<ApiErrorResponse> conflict(
       IllegalStateException exception, HttpServletRequest request) {
     String code = exception.getMessage();
-    if ("ACCOUNT_NOT_ACTIVE".equals(code)) {
-      return ResponseEntity.status(HttpStatus.FORBIDDEN)
-          .body(
-              ApiErrorResponse.of(code, "Tài khoản không ở trạng thái hoạt động", request.getRequestId()));
-    }
-    if ("LAST_ACTIVE_ADMIN".equals(code)) {
-      return ResponseEntity.status(HttpStatus.CONFLICT)
-          .body(
-              ApiErrorResponse.of(code, "Không thể khóa quản trị viên đang hoạt động cuối cùng",
-                  request.getRequestId()));
-    }
-    String message =
-        "EMAIL_EXISTS".equals(code) ? "Email đã được sử dụng" : "Trạng thái yêu cầu không hợp lệ";
-    return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(ApiErrorResponse.of(code, message, request.getRequestId()));
+    record Response(String message, HttpStatus status) {}
+    Response response = switch (code == null ? "" : code) {
+      case "EMAIL_EXISTS" -> new Response("Email đã được sử dụng", HttpStatus.CONFLICT);
+      case "ACCOUNT_NOT_ACTIVE" -> new Response("Tài khoản không ở trạng thái hoạt động", HttpStatus.FORBIDDEN);
+      case "ADMIN_ACCOUNT_BAD_FORMAT" -> new Response("ADMIN_EMAIL and ADMIN_PASSWORD with at least 8 characters are required", HttpStatus.LENGTH_REQUIRED);
+      case "LAST_ACTIVE_ADMIN" -> new Response("Không thể khóa quản trị viên đang hoạt động cuối cùng", HttpStatus.CONFLICT);
+      case "VERSION_CONFLICT" -> new Response("Phiên bản không hợp lệ", HttpStatus.CONFLICT);
+      default -> new Response("Trạng thái yêu cầu không hợp lệ", HttpStatus.CONFLICT);
+    };
+
+    return ResponseEntity.status(response.status())
+        .body(ApiErrorResponse.of(code, response.message(), request.getRequestId()));
   }
 
   @ExceptionHandler(IllegalArgumentException.class)

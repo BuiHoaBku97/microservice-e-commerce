@@ -39,8 +39,10 @@ public class OrderEventConsumer {
       validateEnvelope(envelope);
       CorrelationContext.set(envelope.get("correlationId").asText());
       Runnable action = () -> handle(envelope);
-      if (processedEventService == null) action.run();
-      else processedEventService.process("payment-order-events",
+      if (processedEventService == null)
+        action.run();
+      else
+        processedEventService.process("payment-order-events",
           envelope.get("eventId").asText(), envelope.get("eventType").asText(),
           ProcessedEventService.payloadHash(message), envelope.get("aggregateId").asLong(), action);
       acknowledgment.acknowledge();

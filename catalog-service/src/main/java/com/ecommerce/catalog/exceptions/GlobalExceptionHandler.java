@@ -43,12 +43,15 @@ public class GlobalExceptionHandler {
   ResponseEntity<ApiErrorResponse> conflict(
       IllegalStateException exception, HttpServletRequest request) {
     String code = exception.getMessage();
-    String message =
-        "SKU_EXISTS".equals(code)
-            ? "Mã SKU đã tồn tại"
-            : "SKU_NOT_SELLABLE".equals(code)
-                ? "SKU hoặc sản phẩm không còn được bán"
-                : "Danh mục đã tồn tại";
+    String message = switch (code == null ? "" : code) {
+      case "SKU_EXISTS" -> "Mã SKU đã tồn tại";
+      case "SKU_NOT_SELLABLE" -> "SKU hoặc sản phẩm không còn được bán";
+      case "CATEGORY_EXISTS" -> "Danh mục đã tồn tại";
+      case "VARIANT_EXISTS" -> "Phiên bản sản phẩm đã tồn tại";
+      case "PRODUCT_REQUIRES_ACTIVE_SKU" -> "Sản phẩm cần có ít nhất một SKU hoạt động";
+      default -> code;
+    };
+
     return ResponseEntity.status(HttpStatus.CONFLICT)
         .body(ApiErrorResponse.of(code, message, request.getRequestId()));
   }

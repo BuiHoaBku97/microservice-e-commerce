@@ -34,7 +34,8 @@ public class VnpayController {
     Map<String, String> params = parameters(request);
     String code = vnpayService.validSignature(params) ? params.getOrDefault("vnp_ResponseCode", "99") : "97";
     String target = vnpayService.frontendResultUrl();
-    if (target == null || target.isBlank()) return ResponseEntity.noContent().build();
+    if (target == null || target.isBlank())
+      return ResponseEntity.noContent().build();
     URI location = UriComponentsBuilder.fromUriString(target)
         .queryParam("orderId", params.get("vnp_TxnRef"))
         .queryParam("status", "00".equals(code) ? "success" : "failed")
