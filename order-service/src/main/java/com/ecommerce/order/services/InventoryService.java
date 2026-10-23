@@ -209,7 +209,7 @@ public class InventoryService {
   @Transactional
   public Inventory receipt(Long skuId, CartDtos.InventoryMutationRequest request) {
     if (request.quantity() == null || request.quantity() <= 0)
-      throw new IllegalArgumentException("Số lượng nhập kho phải lớn hơn 0");
+      throw new IllegalArgumentException("RECEIPT_QUANTITY_INVALID");
     Inventory inventory = initialize(skuId);
     inventory.setOnHand(inventory.getOnHand() + request.quantity());
     inventory.setVersion(inventory.getVersion() + 1);
@@ -235,12 +235,12 @@ public class InventoryService {
             .findById(skuId)
             .orElseThrow(() -> new IllegalArgumentException("SKU chưa được khởi tạo tồn kho"));
     if (request.quantity() == null || request.quantity() == 0)
-      throw new IllegalArgumentException("Mức điều chỉnh tồn kho không được bằng 0");
+      throw new IllegalArgumentException("INVENTORY_ADJUSTMENT_INVALID");
     if (request.version() != null && !request.version().equals(inventory.getVersion()))
       throw new IllegalStateException("VERSION_CONFLICT");
     int next = inventory.getOnHand() + request.quantity();
     if (next < inventory.getReserved())
-      throw new IllegalStateException("Điều chỉnh làm tồn kho thấp hơn số lượng đã giữ");
+      throw new IllegalStateException("INVENTORY_BELOW_RESERVED");
     inventory.setOnHand(next);
     inventory.setVersion(inventory.getVersion() + 1);
     inventory.setUpdatedAt(Instant.now());
@@ -360,14 +360,14 @@ public class InventoryService {
     Map<Long, Inventory> inventoryBySkuId =
         inventoryList.stream().collect(Collectors.toMap(Inventory::getSkuId, Function.identity()));
     if (!inventoryBySkuId.keySet().containsAll(quantities.keySet())) {
-      throw new IllegalArgumentException("SKU chưa được khởi tạo tồn kho");
+      throw new IllegalArgumentException("INVENTORY_NOT_INITIALIZED");
     }
     quantities.forEach(
         (skuId, quantity) -> {
           Inventory inventory = inventoryBySkuId.get(skuId);
           int available = inventory.getOnHand() - inventory.getReserved();
           if (available < quantity) {
-            throw new IllegalStateException("Sản phẩm không đủ tồn kho");
+            throw new IllegalStateException("INSUFFICIENT_STOCK");
           }
           inventory.setReserved(inventory.getReserved() + quantity);
           inventory.setVersion(inventory.getVersion() + 1);
@@ -512,7 +512,7 @@ public class InventoryService {
 
   private Reservation requireReservation(Long orderId) {
     if (reservationRepository == null)
-      throw new IllegalStateException("Reservation chưa được cấu hình");
+      throw new IllegalStateException("RESERVATION_NOT_CONFIGURED");
     return reservationRepository
         .findByOrderId(orderId)
         .orElseThrow(() -> new IllegalStateException("RESERVATION_NOT_FOUND"));
@@ -572,7 +572,7 @@ public class InventoryService {
       return;
     }
     if (redissonClient == null || transactionTemplate == null) {
-      throw new IllegalStateException("Khóa tồn kho chưa được cấu hình");
+      throw new IllegalStateException("INVENTORY_LOCK_NOT_CONFIGURED");
     }
     List<RLock> acquiredLocks = new ArrayList<>();
     try {

@@ -80,10 +80,10 @@ public class IdentityServiceImpl implements IdentityService {
             .findByEmail(normalizeEmail(request.email()))
             .orElseThrow(() -> new IllegalArgumentException("USER_NOT_FOUND"));
     if (user.getStatus() != UserStatus.ACTIVE) {
-      throw new AccountNotActiveException("Tài khoản không ở trạng thái hoạt động");
+      throw new AccountNotActiveException("ACCOUNT_NOT_ACTIVE");
     }
     if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-      throw new PasswordIncorrectException("Mật khẩu không đúng");
+      throw new PasswordIncorrectException("PASSWORD_INCORRECT");
     }
     return issueSession(user);
   }
@@ -102,7 +102,7 @@ public class IdentityServiceImpl implements IdentityService {
       throw new IllegalArgumentException("REFRESH_TOKEN_INVALID");
     }
     if (currentRefreshToken.getUser().getStatus() != UserStatus.ACTIVE) {
-      throw new AccountNotActiveException("Tài khoản không ở trạng thái hoạt động");
+      throw new AccountNotActiveException("ACCOUNT_NOT_ACTIVE");
     }
     String rawRefreshToken = newRefreshToken();
     String replacementRefreshTokenHash = hash(rawRefreshToken);
@@ -162,7 +162,7 @@ public class IdentityServiceImpl implements IdentityService {
           .formatHex(
               MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("Không thể băm refresh token", exception);
+      throw new IllegalStateException("REFRESH_TOKEN_HASH_FAILED", exception);
     }
   }
 

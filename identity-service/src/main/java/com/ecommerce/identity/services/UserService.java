@@ -94,7 +94,7 @@ public class UserService {
   private User activeUser(Long id) {
     User user = find(id);
     if (user.getStatus() != UserStatus.ACTIVE) {
-      throw new AccountNotActiveException("Tài khoản không ở trạng thái hoạt động");
+      throw new AccountNotActiveException("ACCOUNT_NOT_ACTIVE");
     }
     return user;
   }

@@ -24,7 +24,7 @@ public class PaymentQueryService {
 
   public PaymentResponse findByOrder(Long userId, Long orderId) {
     if (userId == null || userId <= 0 || orderId == null || orderId <= 0) {
-      throw new IllegalArgumentException("Mã đơn hàng không hợp lệ");
+      throw new IllegalArgumentException("ORDER_ID_INVALID");
     }
     return paymentRepository
         .findByOrderIdAndUserId(orderId, userId)

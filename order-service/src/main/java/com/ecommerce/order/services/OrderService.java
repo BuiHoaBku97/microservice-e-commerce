@@ -86,10 +86,10 @@ public class OrderService {
     this.paymentEventHistoryRepository = paymentEventHistoryRepository;
     this.orderStatusHistoryRepository = orderStatusHistoryRepository;
     if (paymentTimeoutSeconds <= 0) {
-      throw new IllegalArgumentException("Thời hạn thanh toán phải lớn hơn 0");
+      throw new IllegalArgumentException("PAYMENT_DUE_INVALID");
     }
     if (shippingFee < 0) {
-      throw new IllegalArgumentException("Phí vận chuyển không được âm");
+      throw new IllegalArgumentException("SHIPPING_FEE_INVALID");
     }
     this.paymentTimeoutSeconds = paymentTimeoutSeconds;
     this.shippingFee = shippingFee;
@@ -338,10 +338,10 @@ public class OrderService {
   private String normalizeIdempotencyKey(String idempotencyKey) {
     String normalizedKey = idempotencyKey == null ? "" : idempotencyKey.trim();
     if (normalizedKey.isEmpty()) {
-      throw new IllegalArgumentException("Idempotency-Key là bắt buộc");
+      throw new IllegalArgumentException("IDEMPOTENCY_KEY_REQUIRED");
     }
     if (normalizedKey.length() > 100) {
-      throw new IllegalArgumentException("Idempotency-Key không được vượt quá 100 ký tự");
+      throw new IllegalArgumentException("IDEMPOTENCY_KEY_TOO_LONG");
     }
     return normalizedKey;
   }
@@ -366,7 +366,7 @@ public class OrderService {
               MessageDigest.getInstance("SHA-256")
                   .digest(canonical.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("Không thể tạo mã xác nhận checkout", exception);
+      throw new IllegalStateException("CHECKOUT_CONFIRMATION_CODE_FAILED", exception);
     }
   }
 

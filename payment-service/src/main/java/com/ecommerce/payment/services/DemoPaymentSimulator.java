@@ -40,6 +40,9 @@ public class DemoPaymentSimulator {
         paymentRepository
             .findById(paymentId)
             .orElseThrow(() -> new IllegalArgumentException("PAYMENT_NOT_FOUND"));
+    if (!"MOCK_ONLINE".equals(payment.getPaymentMethod())) {
+      throw new IllegalStateException("PAYMENT_METHOD_UNSUPPORTED");
+    }
     String eventId = "demo-" + UUID.randomUUID();
     String transactionId = "demo-tx-" + UUID.randomUUID();
     PaymentCallbackRequest callback =

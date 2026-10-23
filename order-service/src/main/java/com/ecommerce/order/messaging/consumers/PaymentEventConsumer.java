@@ -49,7 +49,7 @@ public class PaymentEventConsumer {
             action);
       acknowledgment.acknowledge();
     } catch (Exception exception) {
-      throw new IllegalStateException("Khong the xu ly su kien thanh toan", exception);
+      throw new IllegalStateException("PAYMENT_EVENT_PROCESSING_FAILED", exception);
     } finally {
       CorrelationContext.clear();
     }

@@ -50,10 +50,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .getPayload();
         validateIssuerAndAudience(claims);
         if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
-          throw new IllegalArgumentException("JWT đã hết hạn");
+          throw new IllegalArgumentException("JWT_EXPIRED");
         }
         if (claims.getSubject() == null || Long.parseLong(claims.getSubject()) <= 0) {
-          throw new IllegalArgumentException("Danh tính khách hàng không hợp lệ");
+      throw new IllegalArgumentException("CUSTOMER_IDENTITY_INVALID");
         }
         String scope = claims.get("scope", String.class);
         var authorities =
@@ -77,7 +77,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (!"ecommerce-identity".equals(claims.getIssuer())
         || claims.getAudience() == null
         || !claims.getAudience().contains("ecommerce-api")) {
-      throw new IllegalArgumentException("JWT issuer or audience is invalid");
+      throw new IllegalArgumentException("JWT_ISSUER_OR_AUDIENCE_INVALID");
     }
   }
 }

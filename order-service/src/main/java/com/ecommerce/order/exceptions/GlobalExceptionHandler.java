@@ -56,13 +56,19 @@ public class GlobalExceptionHandler {
     String code = switch (value == null ? "" : value) {
       case "VERSION_CONFLICT", "CART_CHANGED", "SKU_NOT_SELLABLE", "ACCOUNT_NOT_ACTIVE",
           "INVALID_STATE_TRANSITION", "INVALID_RESERVATION_STATE", "INVALID_INVENTORY_RESERVATION",
-          "RESERVATION_ALREADY_RELEASED", "RESERVATION_ALREADY_COMMITTED", "OUTBOX_NOT_FAILED" -> value;
+          "RESERVATION_ALREADY_RELEASED", "RESERVATION_ALREADY_COMMITTED", "OUTBOX_NOT_FAILED",
+          "INSUFFICIENT_STOCK", "INVENTORY_BELOW_RESERVED", "RESERVATION_NOT_CONFIGURED",
+          "INVENTORY_LOCK_NOT_CONFIGURED", "CHECKOUT_CONFIRMATION_CODE_FAILED" -> value;
       default -> "INVALID_STATE";
     };
     String message = switch (code) {
       case "VERSION_CONFLICT" -> "Dữ liệu đã thay đổi, vui lòng tải lại và thử lại";
       case "CART_CHANGED" -> "Giỏ hàng đã thay đổi, vui lòng kiểm tra lại giỏ hàng";
       case "SKU_NOT_SELLABLE" -> "SKU, sản phẩm hoặc danh mục không còn được bán";
+      case "INSUFFICIENT_STOCK" -> "Số lượng tồn kho không đủ cho số lượng yêu cầu";
+      case "INVENTORY_BELOW_RESERVED" -> "Không thể giảm tồn kho thấp hơn số lượng đã giữ";
+      case "RESERVATION_NOT_CONFIGURED", "INVENTORY_LOCK_NOT_CONFIGURED" -> "Tính năng tồn kho chưa được cấu hình đầy đủ";
+      case "CHECKOUT_CONFIRMATION_CODE_FAILED" -> "Không thể tạo mã xác nhận checkout";
       case "ACCOUNT_NOT_ACTIVE" -> "Tài khoản chưa được kích hoạt";
       case "INVALID_STATE_TRANSITION" -> "Trạng thái đơn hàng không cho phép thao tác này";
       case "INVALID_RESERVATION_STATE", "INVALID_INVENTORY_RESERVATION" -> "Trạng thái giữ hàng không hợp lệ";
@@ -111,6 +117,16 @@ public class GlobalExceptionHandler {
       case "INVALID_ORDER_ID", "ORDER_ID_REQUIRED" -> "Mã đơn hàng không hợp lệ";
       case "VERSION_REQUIRED" -> "Thiếu phiên bản dữ liệu";
       case "INVALID_TIME_RANGE" -> "Khoảng thời gian không hợp lệ";
+      case "SKU_CHECK_LIMIT_EXCEEDED" -> "Chỉ được kiểm tra tối đa 100 SKU";
+      case "SKU_IDS_INVALID" -> "Danh sách SKU phải chứa các ID lớn hơn 0";
+      case "CART_ITEM_QUANTITY_EXCEEDED" -> "Số lượng mỗi SKU trong giỏ không được vượt quá 10";
+      case "ORDER_ID_INVALID" -> "Mã đơn hàng không hợp lệ";
+      case "PAYMENT_DUE_INVALID" -> "Thời hạn thanh toán phải lớn hơn 0";
+      case "SHIPPING_FEE_INVALID" -> "Phí vận chuyển không được âm";
+      case "IDEMPOTENCY_KEY_TOO_LONG" -> "Idempotency-Key không được vượt quá 100 ký tự";
+      case "RECEIPT_QUANTITY_INVALID" -> "Số lượng nhập kho phải lớn hơn 0";
+      case "INVENTORY_ADJUSTMENT_INVALID" -> "Mức điều chỉnh tồn kho không được bằng 0";
+      case "INVENTORY_NOT_INITIALIZED" -> "SKU chưa được khởi tạo tồn kho";
       case "INVALID_RESERVATION_QUANTITY" -> "Số lượng giữ hàng không hợp lệ";
       case "CORRELATION_ID_INVALID" -> "Mã tương quan không hợp lệ";
       case "ORDER_EVENT_ENVELOPE_INVALID", "PAYMENT_EVENT_ENVELOPE_INVALID" -> "Định dạng sự kiện không hợp lệ";

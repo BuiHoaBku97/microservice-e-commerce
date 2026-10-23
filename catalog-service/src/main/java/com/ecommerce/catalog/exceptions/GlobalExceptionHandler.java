@@ -40,6 +40,7 @@ public class GlobalExceptionHandler {
           case "CATEGORY_NOT_FOUND" -> "Không tìm thấy danh mục";
           case "PRODUCT_NOT_FOUND" -> "Không tìm thấy sản phẩm đang được bán";
           case "SKU_NOT_FOUND" -> "Không tìm thấy SKU";
+          case "CHECKOUT_SKU_LIST_INVALID" -> "Danh sách SKU checkout không hợp lệ";
           default -> "Dữ liệu danh mục hoặc sản phẩm không hợp lệ";
         };
     return ResponseEntity.status(status)

@@ -7,11 +7,22 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  ResponseEntity<ApiErrorResponse> unreadable(
+      HttpMessageNotReadableException exception, HttpServletRequest request) {
+    return ResponseEntity.badRequest()
+        .body(ApiErrorResponse.of(
+            "PAYMENT_RESULT_INVALID",
+            "Kết quả mô phỏng thanh toán chỉ được phép là SUCCESS hoặc FAILED",
+            request.getRequestId()));
+  }
+
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
   ResponseEntity<ApiErrorResponse> methodNotAllowed(
       HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
@@ -68,6 +79,7 @@ public class GlobalExceptionHandler {
       case "PAYMENT_EXPIRED" -> "Khoản thanh toán đã hết hạn";
       case "PAYMENT_NOT_INITIALIZABLE" -> "Khoản thanh toán chưa thể khởi tạo";
       case "PAYMENT_METHOD_UNSUPPORTED" -> "Phương thức thanh toán chưa được hỗ trợ";
+      case "REFRESH_TOKEN_HASH_FAILED" -> "Không thể xử lý refresh token";
       case "CALLBACK_CONFLICT" -> "Callback thanh toán đã tồn tại với dữ liệu khác";
       case "CALLBACK_MISMATCH" -> "Dữ liệu callback không khớp với khoản thanh toán";
       case "PAYMENT_CALLBACK_SECRET_NOT_CONFIGURED" -> "Thanh toán chưa được cấu hình đầy đủ";

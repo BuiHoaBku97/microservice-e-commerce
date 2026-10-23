@@ -65,7 +65,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (!"ecommerce-identity".equals(claims.getIssuer())
         || claims.getAudience() == null
         || !claims.getAudience().contains("ecommerce-api")) {
-      throw new IllegalArgumentException("JWT issuer or audience is invalid");
+      throw new IllegalArgumentException("JWT_ISSUER_OR_AUDIENCE_INVALID");
     }
   }
 }

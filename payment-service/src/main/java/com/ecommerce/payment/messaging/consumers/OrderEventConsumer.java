@@ -47,7 +47,7 @@ public class OrderEventConsumer {
           ProcessedEventService.payloadHash(message), envelope.get("aggregateId").asLong(), action);
       acknowledgment.acknowledge();
     } catch (Exception exception) {
-      throw new IllegalStateException("Khong the xu ly su kien don hang", exception);
+      throw new IllegalStateException("ORDER_EVENT_PROCESSING_FAILED", exception);
     } finally {
       CorrelationContext.clear();
     }

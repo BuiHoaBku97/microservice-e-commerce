@@ -88,7 +88,7 @@ public class OutboxEventService {
               occurredAt,
               eventJson));
     } catch (JsonProcessingException exception) {
-      throw new IllegalStateException("Khong the tao su kien don hang", exception);
+      throw new IllegalStateException("ORDER_EVENT_CREATION_FAILED", exception);
     }
   }
 }

@@ -35,7 +35,7 @@ public record NotificationEvent(
             : payload.hasNonNull("paymentId") ? payload.get("paymentId").asLong() : null;
     String referenceType = orderId != null ? "ORDER" : "PAYMENT";
     if (eventType.isBlank() || userId <= 0 || referenceId == null || referenceId <= 0) {
-      throw new IllegalArgumentException("Payload sự kiện thông báo không hợp lệ");
+      throw new IllegalArgumentException("EVENT_PAYLOAD_INVALID");
     }
     String title;
     String message;
@@ -72,7 +72,7 @@ public record NotificationEvent(
         title = "Đơn hàng đã hoàn tất";
         message = "Đơn hàng #" + referenceId + " đã được giao thành công.";
       }
-      default -> throw new IllegalArgumentException("Loại sự kiện không được hỗ trợ");
+      default -> throw new IllegalArgumentException("EVENT_TYPE_UNSUPPORTED");
     }
     return new NotificationEvent(
         eventId,

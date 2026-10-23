@@ -186,7 +186,7 @@ public class CatalogServiceImpl implements CatalogService {
         || skuIds.size() > 100
         || skuIds.stream().anyMatch(id -> id == null || id <= 0)
         || skuIds.size() != skuIds.stream().distinct().count()) {
-      throw new IllegalArgumentException("Danh sách SKU checkout không hợp lệ");
+      throw new IllegalArgumentException("CHECKOUT_SKU_LIST_INVALID");
     }
 
     return skuIds.stream()

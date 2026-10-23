@@ -53,7 +53,7 @@ public class ProcessedEventService {
               MessageDigest.getInstance("SHA-256")
                   .digest(payload.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException("SHA-256 unavailable", exception);
+      throw new IllegalStateException("EVENT_HASH_FAILED", exception);
     }
   }
 }

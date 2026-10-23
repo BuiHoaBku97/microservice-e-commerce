@@ -78,7 +78,7 @@ public class PaymentEventService {
               occurredAt,
               eventJson));
     } catch (JsonProcessingException exception) {
-      throw new IllegalStateException("Khong the tao su kien thanh toan", exception);
+      throw new IllegalStateException("PAYMENT_EVENT_CREATION_FAILED", exception);
     }
   }
 }

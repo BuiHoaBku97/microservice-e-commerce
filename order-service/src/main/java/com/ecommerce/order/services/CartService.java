@@ -61,7 +61,7 @@ public class CartService {
     } else {
       int quantity = item.getQuantity() + request.quantity();
       if (quantity > 10)
-        throw new IllegalArgumentException("Số lượng mỗi SKU trong giỏ không được vượt quá 10");
+        throw new IllegalArgumentException("CART_ITEM_QUANTITY_EXCEEDED");
       item.setQuantity(quantity);
       item.setDisplayedUnitPrice(catalogSku.unitPrice());
       item.touch();

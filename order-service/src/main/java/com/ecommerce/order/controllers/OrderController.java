@@ -188,10 +188,10 @@ public class OrderController {
   public ApiResponse<List<CartDtos.InventoryAvailabilityResponse>> availability(
       @RequestParam List<Long> skuIds) {
     if (skuIds.size() > 100) {
-      throw new IllegalArgumentException("Chỉ được kiểm tra tối đa 100 SKU");
+      throw new IllegalArgumentException("SKU_CHECK_LIMIT_EXCEEDED");
     }
     if (skuIds.isEmpty() || skuIds.stream().anyMatch(id -> id == null || id <= 0)) {
-      throw new IllegalArgumentException("Danh sách SKU phải chứa các ID lớn hơn 0");
+      throw new IllegalArgumentException("SKU_IDS_INVALID");
     }
     return success(inventoryService.availability(skuIds));
   }
