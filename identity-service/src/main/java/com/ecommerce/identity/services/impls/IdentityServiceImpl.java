@@ -78,7 +78,7 @@ public class IdentityServiceImpl implements IdentityService {
     User user =
         userRepository
             .findByEmail(normalizeEmail(request.email()))
-            .orElseThrow(() -> new PasswordIncorrectException("Mật khẩu không đúng"));
+            .orElseThrow(() -> new IllegalArgumentException("USER_NOT_FOUND"));
     if (user.getStatus() != UserStatus.ACTIVE) {
       throw new AccountNotActiveException("Tài khoản không ở trạng thái hoạt động");
     }
@@ -96,10 +96,10 @@ public class IdentityServiceImpl implements IdentityService {
         refreshTokenRepository
             .findByTokenHashForUpdate(currentRefreshTokenHash)
             .orElseThrow(
-                () -> new IllegalArgumentException("Refresh token không hợp lệ hoặc đã hết hạn"));
+                () -> new IllegalArgumentException("REFRESH_TOKEN_INVALID"));
     Instant now = Instant.now();
     if (!currentRefreshToken.isUsableAt(now)) {
-      throw new IllegalArgumentException("Refresh token không hợp lệ hoặc đã hết hạn");
+      throw new IllegalArgumentException("REFRESH_TOKEN_INVALID");
     }
     if (currentRefreshToken.getUser().getStatus() != UserStatus.ACTIVE) {
       throw new AccountNotActiveException("Tài khoản không ở trạng thái hoạt động");
