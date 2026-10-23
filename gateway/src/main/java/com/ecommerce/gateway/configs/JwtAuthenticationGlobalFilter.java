@@ -3,7 +3,12 @@ package com.ecommerce.gateway.configs;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.SignatureException;
+import io.jsonwebtoken.UnsupportedJwtException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
@@ -46,16 +51,28 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
     }
 
     String header = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-    if (header == null || !header.startsWith("Bearer ")) {
+    if (header == null || header.isBlank()) {
       return complete(
           exchange,
           HttpStatus.UNAUTHORIZED,
-          "UNAUTHORIZED",
-          "Y\u00eau c\u1ea7u x\u00e1c th\u1ef1c h\u1ee3p l\u1ec7");
+          "AUTHORIZATION_REQUIRED",
+          "Yêu cầu xác thực là bắt buộc");
+    }
+    if (!header.startsWith("Bearer ")) {
+      return complete(
+          exchange,
+          HttpStatus.UNAUTHORIZED,
+          "AUTHORIZATION_SCHEME_INVALID",
+          "Authorization phải sử dụng Bearer token");
     }
 
     try {
-      Claims claims = authenticate(header.substring(7));
+      String token = header.substring(7).trim();
+      if (token.isEmpty()) {
+        return complete(
+            exchange, HttpStatus.UNAUTHORIZED, "TOKEN_FORMAT_INVALID", "Token không đúng định dạng");
+      }
+      Claims claims = authenticate(token);
       if (!routeValidator.hasRouteAccess(exchange, claims)) {
         return complete(
             exchange,
@@ -65,9 +82,11 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
       }
       exchange.getAttributes().put("authenticatedUserId", claims.getSubject());
       return chain.filter(exchange);
+    } catch (JwtAuthenticationException exception) {
+      return complete(exchange, HttpStatus.UNAUTHORIZED, exception.code, exception.message);
     } catch (Exception exception) {
       return complete(
-          exchange, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "JWT kh\u00f4ng h\u1ee3p l\u1ec7");
+          exchange, HttpStatus.UNAUTHORIZED, "TOKEN_INVALID", "Token đăng nhập không hợp lệ");
     }
   }
 
@@ -77,15 +96,29 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
   }
 
   private Claims authenticate(String token) {
-    Claims claims =
-        Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token).getPayload();
-    if (claims.getExpiration() == null || claims.getExpiration().before(new Date())) {
-      throw new IllegalArgumentException("JWT kh\u00f4ng h\u1ee3p l\u1ec7");
+    Claims claims;
+    try {
+      claims = Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token).getPayload();
+    } catch (ExpiredJwtException exception) {
+      throw new JwtAuthenticationException("JWT_EXPIRED", "Token đã hết hạn");
+    } catch (MalformedJwtException | UnsupportedJwtException exception) {
+      throw new JwtAuthenticationException("TOKEN_FORMAT_INVALID", "Token không đúng định dạng");
+    } catch (SignatureException exception) {
+      throw new JwtAuthenticationException("TOKEN_SIGNATURE_INVALID", "Chữ ký token không hợp lệ");
+    } catch (JwtException exception) {
+      throw new JwtAuthenticationException("TOKEN_INVALID", "Token đăng nhập không hợp lệ");
+    }
+    if (claims.getExpiration() == null) {
+      throw new JwtAuthenticationException("JWT_EXPIRATION_MISSING", "Token thiếu thời hạn sử dụng");
+    }
+    if (claims.getExpiration().before(new Date())) {
+      throw new JwtAuthenticationException("JWT_EXPIRED", "Token đã hết hạn");
     }
     if (!"ecommerce-identity".equals(claims.getIssuer())
         || claims.getAudience() == null
         || !claims.getAudience().contains("ecommerce-api")) {
-      throw new IllegalArgumentException("JWT issuer or audience is invalid");
+      throw new JwtAuthenticationException(
+          "JWT_ISSUER_OR_AUDIENCE_INVALID", "Issuer hoặc audience của token không hợp lệ");
     }
     return claims;
   }
@@ -106,6 +139,16 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
       return exchange.getResponse().writeWith(Mono.just(buffer));
     } catch (JsonProcessingException exception) {
       return exchange.getResponse().setComplete();
+    }
+  }
+
+  private static final class JwtAuthenticationException extends RuntimeException {
+    private final String code;
+    private final String message;
+
+    private JwtAuthenticationException(String code, String message) {
+      this.code = code;
+      this.message = message;
     }
   }
 }
