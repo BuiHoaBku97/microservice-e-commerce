@@ -8,9 +8,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+  @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+  ResponseEntity<ApiErrorResponse> methodNotAllowed(
+      HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+        .body(ApiErrorResponse.of("METHOD_NOT_ALLOWED", "Phuong thuc HTTP khong duoc ho tro cho duong dan nay", request.getRequestId()));
+  }
   @ExceptionHandler(MethodArgumentNotValidException.class)
   ResponseEntity<ApiErrorResponse> validation(
       MethodArgumentNotValidException exception, HttpServletRequest request) {
