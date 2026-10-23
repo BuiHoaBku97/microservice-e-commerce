@@ -197,8 +197,7 @@ public class CatalogServiceImpl implements CatalogService {
                       .findById(skuId)
                       .orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
               Product product = sku.getProduct();
-              boolean sellable =
-                  product.getStatus() == Status.ACTIVE && sku.getStatus() == Status.ACTIVE;
+              boolean sellable = isSellable(sku);
               if (!sellable) {
                 throw new IllegalStateException("SKU_NOT_SELLABLE");
               }
@@ -225,7 +224,7 @@ public class CatalogServiceImpl implements CatalogService {
             .findById(skuId)
             .orElseThrow(() -> new IllegalArgumentException("SKU_NOT_FOUND"));
     Product product = sku.getProduct();
-    boolean sellable = product.getStatus() == Status.ACTIVE && sku.getStatus() == Status.ACTIVE;
+    boolean sellable = isSellable(sku);
     return new CheckoutItemResponse(
         sku.getId(),
         product.getId(),
@@ -237,6 +236,13 @@ public class CatalogServiceImpl implements CatalogService {
         sku.getCurrency(),
         product.getVersion(),
         sellable);
+  }
+
+  private boolean isSellable(Sku sku) {
+    Product product = sku.getProduct();
+    return product.getStatus() == Status.ACTIVE
+        && sku.getStatus() == Status.ACTIVE
+        && product.getCategory().getStatus() == Status.ACTIVE;
   }
 
   @Override
