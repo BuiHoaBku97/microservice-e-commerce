@@ -52,11 +52,13 @@ public class GlobalExceptionHandler {
     String code = exception.getMessage();
     String message = switch (code == null ? "" : code) {
       case "SKU_EXISTS" -> "Mã SKU đã tồn tại";
+      case "VERSION_CONFLICT" -> "Dữ liệu đã thay đổi, vui lòng tải lại và thử lại";
+      case "REINDEX_ALREADY_RUNNING" -> "Tác vụ đồng bộ danh mục đang được thực hiện";
       case "SKU_NOT_SELLABLE" -> "SKU hoặc sản phẩm không còn được bán";
       case "CATEGORY_EXISTS" -> "Danh mục đã tồn tại";
       case "VARIANT_EXISTS" -> "Phiên bản sản phẩm đã tồn tại";
       case "PRODUCT_REQUIRES_ACTIVE_SKU" -> "Sản phẩm cần có ít nhất một SKU hoạt động";
-      default -> code;
+      default -> "Trạng thái danh mục hoặc sản phẩm không hợp lệ";
     };
 
     return ResponseEntity.status(HttpStatus.CONFLICT)
