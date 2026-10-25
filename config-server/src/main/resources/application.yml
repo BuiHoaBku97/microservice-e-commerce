@@ -12,6 +12,12 @@ spring:
           clone-on-start: ${CONFIG_GIT_CLONE_ON_START:true}
           refresh-rate: ${CONFIG_GIT_REFRESH_RATE:0}
           force-pull: ${CONFIG_GIT_FORCE_PULL:true}
+      bus:
+        enabled: true
+      stream:
+        kafka:
+          binder:
+            brokers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 server:
   port: ${SERVER_PORT:8888}

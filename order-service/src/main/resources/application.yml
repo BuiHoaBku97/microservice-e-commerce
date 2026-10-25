@@ -1,5 +1,7 @@
 spring:
   application: {name: order-service}
+  config:
+    import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
   profiles: {default: local}
   datasource:
     url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5433/order_db}

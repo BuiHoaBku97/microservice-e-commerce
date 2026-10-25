@@ -1,6 +1,8 @@
 spring:
   application:
     name: payment-service
+  config:
+    import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
   profiles:
     default: local
   datasource:

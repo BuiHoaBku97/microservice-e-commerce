@@ -65,6 +65,8 @@ services:
         --topic ecommerce.payment.events.order-service.dlt --partitions 3 --replication-factor 1
         ; /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
         --topic ecommerce.payment.events.notification-service.dlt --partitions 3 --replication-factor 1
+        ; /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic springCloudBus --partitions 3 --replication-factor 1
 
   redis:
     image: redis:7.4.1
@@ -95,12 +97,45 @@ services:
       timeout: 10s
       retries: 10
 
+  config-server:
+    build:
+      context: ./config-server
+      dockerfile: Dockerfile
+    environment:
+      SERVER_PORT: 8888
+      CONFIG_GIT_URI: ${CONFIG_GIT_URI:?CONFIG_GIT_URI must be set}
+      CONFIG_GIT_USERNAME: ${CONFIG_GIT_USERNAME:-}
+      CONFIG_GIT_PASSWORD: ${CONFIG_GIT_PASSWORD:-}
+      CONFIG_GIT_LABEL: ${CONFIG_GIT_LABEL:-main}
+      CONFIG_GIT_CLONE_ON_START: ${CONFIG_GIT_CLONE_ON_START:-true}
+      CONFIG_GIT_REFRESH_RATE: ${CONFIG_GIT_REFRESH_RATE:-0}
+      CONFIG_GIT_FORCE_PULL: ${CONFIG_GIT_FORCE_PULL:-true}
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:-1.0}
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+    ports:
+      - "8888:8888"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
   eureka-server:
     build:
       context: ./eureka-server
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8761
+    depends_on:
+      config-server:
+        condition: service_healthy
     ports:
       - "8761:8761"
     healthcheck:
@@ -116,6 +151,8 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8081
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64:?JWT_PRIVATE_KEY_BASE64 must be set}
       JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
       SERVICE_JWT_PUBLIC_KEYS: "${IDENTITY_SERVICE_JWT_PUBLIC_KEYS:-order-service-key-1=${ORDER_SERVICE_JWT_PUBLIC_KEY_BASE64:?ORDER_SERVICE_JWT_PUBLIC_KEY_BASE64 must be set};catalog-service-key-1=${CATALOG_SERVICE_JWT_PUBLIC_KEY_BASE64:?CATALOG_SERVICE_JWT_PUBLIC_KEY_BASE64 must be set};payment-service-key-1=${PAYMENT_SERVICE_JWT_PUBLIC_KEY_BASE64:?PAYMENT_SERVICE_JWT_PUBLIC_KEY_BASE64 must be set};notification-service-key-1=${NOTIFICATION_SERVICE_JWT_PUBLIC_KEY_BASE64:?NOTIFICATION_SERVICE_JWT_PUBLIC_KEY_BASE64 must be set}}"
@@ -129,9 +166,13 @@ services:
       IDENTITY_DB_USERNAME: identity_user
       IDENTITY_DB_PASSWORD: identity_password
     depends_on:
+      kafka:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
@@ -145,6 +186,8 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8082
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
       SERVICE_JWT_PUBLIC_KEYS: "${CATALOG_SERVICE_JWT_PUBLIC_KEYS:-order-service-key-1=${ORDER_SERVICE_JWT_PUBLIC_KEY_BASE64:?ORDER_SERVICE_JWT_PUBLIC_KEY_BASE64 must be set}}"
       SERVICE_JWT_KEY_OWNERS: "${CATALOG_SERVICE_JWT_KEY_OWNERS:-order-service-key-1=order-service}"
@@ -158,6 +201,8 @@ services:
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       SPRING_DATA_REDIS_HOST: redis
     depends_on:
+      kafka:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       elasticsearch:
@@ -165,6 +210,8 @@ services:
       redis:
         condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
       identity-service:
         condition: service_healthy
@@ -180,6 +227,8 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8083
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
       SERVICE_JWT_PRIVATE_KEY_BASE64: ${ORDER_SERVICE_JWT_PRIVATE_KEY_BASE64:?ORDER_SERVICE_JWT_PRIVATE_KEY_BASE64 must be set}
       SERVICE_JWT_KEY_ID: ${ORDER_SERVICE_JWT_KEY_ID:-order-service-key-1}
@@ -200,6 +249,8 @@ services:
         condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
       identity-service:
         condition: service_healthy
     healthcheck:
@@ -214,6 +265,8 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8084
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       EUREKA_URI: http://eureka-server:8761/eureka/
       PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/payment_db
       PAYMENT_DB_USERNAME: payment_user
@@ -239,6 +292,8 @@ services:
         condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
       identity-service:
         condition: service_healthy
     healthcheck:
@@ -253,6 +308,8 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8085
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       EUREKA_URI: http://eureka-server:8761/eureka/
       NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/notification_db
       NOTIFICATION_DB_USERNAME: notification_user
@@ -269,6 +326,8 @@ services:
         condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
       identity-service:
         condition: service_healthy
     healthcheck:
@@ -283,11 +342,22 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8080
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       EUREKA_URI: http://eureka-server:8761/eureka/
       SPRING_DATA_REDIS_HOST: redis
       JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      RATE_LIMIT_PUBLIC: ${RATE_LIMIT_PUBLIC:-120}
+      RATE_LIMIT_AUTHENTICATED: ${RATE_LIMIT_AUTHENTICATED:-240}
+      RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-10}
+      RATE_LIMIT_CHECKOUT: ${RATE_LIMIT_CHECKOUT:-30}
     depends_on:
+      kafka:
+        condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -389,6 +459,17 @@ services:
       - ./docker/observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
     depends_on:
       - jaeger
+  vnpay-tunnel:
+    image: node:22-alpine
+    working_dir: /app
+    command: >
+      sh -c "npx --yes localtunnel
+      --local-host gateway
+      --port 8080
+      --subdomain six-spiders-play"
+    depends_on:
+      gateway:
+        condition: service_healthy
 
 volumes:
   postgres-data:

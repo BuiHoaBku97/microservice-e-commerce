@@ -1,5 +1,7 @@
 spring:
   application: {name: gateway}
+  config:
+    import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
   security:
     jwt:
       public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
