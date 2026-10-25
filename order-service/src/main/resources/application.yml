@@ -1,70 +1,7 @@
 spring:
-  application: {name: order-service}
+  application:
+    name: order-service
+  profiles:
+    default: local
   config:
     import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
-  profiles: {default: local}
-  datasource:
-    url: ${ORDER_DB_URL:jdbc:postgresql://localhost:5433/order_db}
-    username: ${ORDER_DB_USERNAME:order_user}
-    password: ${ORDER_DB_PASSWORD:order_password}
-  jpa:
-    hibernate: {ddl-auto: validate}
-    open-in-view: false
-  data:
-    redis: {host: "${SPRING_DATA_REDIS_HOST:localhost}", port: "${SPRING_DATA_REDIS_PORT:6379}"}
-  flyway: {enabled: true, locations: classpath:db/migration}
-  security:
-    jwt:
-      public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
-      private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
-  kafka:
-    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    consumer:
-      group-id: ${ORDER_KAFKA_GROUP_ID:order-service}
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-    listener:
-      ack-mode: manual_immediate
-      observation-enabled: true
-    producer:
-      observation-enabled: true
-      acks: all
-      properties: {enable.idempotence: true}
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-server: {port: 8083}
-management:
-  endpoints.web.exposure.include: health,prometheus
-  tracing:
-    sampling.probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
-management.otlp.tracing.endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://otel-collector:4318/v1/traces}
-logging.structured.format.console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:logstash}
-app:
-  service-jwt:
-    private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
-    issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
-    subject: order-service
-    key-id: ${SERVICE_JWT_KEY_ID:order-service-key-1}
-    ttl-seconds: ${SERVICE_JWT_TTL_SECONDS:60}
-  active-account:
-    enabled: ${ACTIVE_ACCOUNT_CHECK_ENABLED:true}
-    identity-url: ${IDENTITY_INTERNAL_URL:http://localhost:8081}
-  order:
-    payment-expiry-scan-delay-ms: "${PAYMENT_EXPIRY_SCAN_DELAY_MS:30000}"
-    shipping-fee: "${ORDER_SHIPPING_FEE:30000}"
-  clients:
-    catalog:
-      connect-timeout-ms: ${CATALOG_CONNECT_TIMEOUT_MS:2000}
-      read-timeout-ms: ${CATALOG_READ_TIMEOUT_MS:3000}
-  inventory:
-    lock: {wait-ms: "${INVENTORY_LOCK_WAIT_MS:2000}"}
-  kafka:
-    topics:
-      order-events: ${ORDER_EVENTS_TOPIC:ecommerce.order.events}
-      payment-events: ${PAYMENT_EVENTS_TOPIC:ecommerce.payment.events}
-  outbox: {publish-delay-ms: "${OUTBOX_PUBLISH_DELAY_MS:5000}"}
-eureka:
-  client:
-    service-url: {defaultZone: "${EUREKA_URI:http://localhost:8761/eureka/}"}

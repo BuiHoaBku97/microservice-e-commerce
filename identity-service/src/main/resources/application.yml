@@ -1,39 +1,7 @@
 spring:
-  application: {name: identity-service}
+  application:
+    name: identity-service
+  profiles:
+    default: local
   config:
     import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
-  profiles: {default: local}
-  datasource:
-    url: ${IDENTITY_DB_URL:jdbc:postgresql://localhost:5433/identity_db}
-    username: ${IDENTITY_DB_USERNAME:identity_user}
-    password: ${IDENTITY_DB_PASSWORD:identity_password}
-  jpa:
-    hibernate: {ddl-auto: validate}
-    open-in-view: false
-  flyway: {enabled: true, locations: classpath:db/migration}
-security:
-  jwt:
-    access-token-seconds: ${JWT_ACCESS_TOKEN_SECONDS:900}
-    refresh-token-seconds: ${JWT_REFRESH_TOKEN_SECONDS:2592000}
-    private-key-base64: ${JWT_PRIVATE_KEY_BASE64}
-    public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
-  service-jwt:
-    public-keys: ${SERVICE_JWT_PUBLIC_KEYS}
-    key-owners: ${SERVICE_JWT_KEY_OWNERS}
-    issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
-app:
-  admin-bootstrap:
-    enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
-    email: ${ADMIN_EMAIL:}
-    password: ${ADMIN_PASSWORD:}
-    full-name: ${ADMIN_FULL_NAME:System Administrator}
-eureka:
-  client:
-    service-url: {defaultZone: "${EUREKA_URI:http://localhost:8761/eureka/}"}
-server: {port: 8081}
-management:
-  endpoints.web.exposure.include: health,prometheus
-  tracing:
-    sampling.probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
-management.otlp.tracing.endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://otel-collector:4318/v1/traces}
-logging.structured.format.console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:logstash}

@@ -1,43 +1,7 @@
 spring:
-  application: {name: catalog-service}
+  application:
+    name: catalog-service
+  profiles:
+    default: local
   config:
     import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
-  profiles: {default: local}
-  datasource:
-    url: ${CATALOG_DB_URL:jdbc:postgresql://localhost:5433/catalog_db}
-    username: ${CATALOG_DB_USERNAME:catalog_user}
-    password: ${CATALOG_DB_PASSWORD:catalog_password}
-  jpa:
-    hibernate: {ddl-auto: validate}
-    open-in-view: false
-  flyway: {enabled: true, locations: classpath:db/migration}
-  data:
-    redis: {host: "${SPRING_DATA_REDIS_HOST:localhost}", port: "${SPRING_DATA_REDIS_PORT:6379}"}
-  security:
-    jwt:
-      public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
-security:
-  service-jwt:
-    public-keys: ${SERVICE_JWT_PUBLIC_KEYS}
-    key-owners: ${SERVICE_JWT_KEY_OWNERS}
-    private-key-base64: ${SERVICE_JWT_PRIVATE_KEY_BASE64}
-    issuer: ${SERVICE_JWT_ISSUER:ecommerce-internal}
-    key-id: ${SERVICE_JWT_KEY_ID:catalog-service-key-1}
-  active-account:
-    identity-url: ${IDENTITY_INTERNAL_URL:http://localhost:8081}
-eureka:
-  client:
-    service-url: {defaultZone: "${EUREKA_URI:http://localhost:8761/eureka/}"}
-server: {port: 8082}
-management:
-  endpoints.web.exposure.include: health,prometheus
-  tracing:
-    sampling.probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
-management.otlp.tracing.endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://otel-collector:4318/v1/traces}
-logging.structured.format.console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:logstash}
-app:
-  catalog:
-    default-image-url: ${CATALOG_DEFAULT_IMAGE_URL:https://res.cloudinary.com/demo/image/upload/product-placeholder.jpg}
-    cache-ttl-seconds: ${CATALOG_CACHE_TTL_SECONDS:300}
-    index-delay-ms: ${CATALOG_INDEX_DELAY_MS:3000}
-    reindex-delay-ms: ${CATALOG_REINDEX_DELAY_MS:2000}
