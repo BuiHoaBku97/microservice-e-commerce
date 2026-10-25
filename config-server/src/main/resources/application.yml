@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: config-server
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_GIT_URI:}
+          username: ${CONFIG_GIT_USERNAME:}
+          password: ${CONFIG_GIT_PASSWORD:}
+          default-label: ${CONFIG_GIT_LABEL:main}
+          clone-on-start: ${CONFIG_GIT_CLONE_ON_START:true}
+          refresh-rate: ${CONFIG_GIT_REFRESH_RATE:0}
+          force-pull: ${CONFIG_GIT_FORCE_PULL:true}
+
+server:
+  port: ${SERVER_PORT:8888}
+
+management:
+  endpoints.web.exposure.include: health,prometheus
+  endpoint.health.show-details: never
+  tracing:
+    sampling.probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
+management.otlp.tracing.endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://otel-collector:4318/v1/traces}
+logging.structured.format.console: ${LOGGING_STRUCTURED_FORMAT_CONSOLE:logstash}
