@@ -32,9 +32,12 @@ CONFIG_GIT_LABEL=main
 CONFIG_GIT_CLONE_ON_START=true
 CONFIG_GIT_REFRESH_RATE=0
 CONFIG_GIT_FORCE_PULL=true
+CONFIG_WEBHOOK_SECRET=<github-webhook-secret>
 ```
 
 The token needs repository read access. Never commit `.env` or the token.
+`CONFIG_WEBHOOK_SECRET` is used to validate GitHub's `X-Hub-Signature-256`
+header. Leave it empty only for a local, non-public Config Server.
 
 ## Startup and checks
 
