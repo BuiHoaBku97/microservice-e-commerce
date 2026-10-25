@@ -151,6 +151,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8081
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       JWT_PRIVATE_KEY_BASE64: ${JWT_PRIVATE_KEY_BASE64:?JWT_PRIVATE_KEY_BASE64 must be set}
@@ -186,6 +187,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8082
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
@@ -227,6 +229,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8083
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       JWT_PUBLIC_KEY_BASE64: ${JWT_PUBLIC_KEY_BASE64:?JWT_PUBLIC_KEY_BASE64 must be set}
@@ -265,6 +268,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8084
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       EUREKA_URI: http://eureka-server:8761/eureka/
@@ -308,6 +312,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8085
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       EUREKA_URI: http://eureka-server:8761/eureka/
@@ -342,6 +347,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       SPRING_CLOUD_STREAM_KAFKA_BINDER_BROKERS: kafka:9092
       EUREKA_URI: http://eureka-server:8761/eureka/
