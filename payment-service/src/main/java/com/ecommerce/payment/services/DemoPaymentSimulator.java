@@ -11,11 +11,9 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 @Service
-@Profile({"local", "demo"})
 public class DemoPaymentSimulator {
   private final PaymentRepository paymentRepository;
   private final PaymentService paymentService;

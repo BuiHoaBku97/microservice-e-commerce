@@ -6,11 +6,9 @@ import com.ecommerce.payment.models.dtos.responses.PaymentResponse;
 import com.ecommerce.payment.services.DemoPaymentSimulator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@Profile({"local", "demo"})
 @RequestMapping("/api/v1/admin/demo/payments")
 public class DemoPaymentController {
   private final DemoPaymentSimulator paymentSimulator;
